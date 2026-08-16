@@ -48,6 +48,8 @@ function getMatches({ include, exclude }: Options, event: Record<string, unknown
   };
 }
 
+app.get("/", ({ redirect }) => redirect("https://github.com/ariesclark/octohook"));
+
 app.post("/:channelId/:token", async ({ req, json }) => {
   const { channelId, token } = req.param();
 
