@@ -1,5 +1,5 @@
 {
-  "name": "better-github-discord-webhook",
+  "name": "octohook",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

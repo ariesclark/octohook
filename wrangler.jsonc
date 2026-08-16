@@ -1,25 +1,25 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "better-github-discord-webhook",
+	"name": "octohook",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-08-16",
 	"upload_source_maps": true,
 	"routes": [
 		{
-			"pattern": "bdgw.aries.fyi",
+			"pattern": "octohook.aries.fyi",
 			"custom_domain": true
 		}
 	],
 	"queues": {
 		"consumers": [
 			{
-				"queue": "bdgw-webhooks"
+				"queue": "octohook-webhooks"
 			}
 		],
 		"producers": [
 			{
 				"binding": "WEBHOOK_QUEUE",
-				"queue": "bdgw-webhooks"
+				"queue": "octohook-webhooks"
 			}
 		]
 	}

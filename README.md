@@ -1,4 +1,4 @@
-# better-github-discord-webhook
+# octohook
 
 Filterable proxy for GitHub webhooks headed to Discord, running on Cloudflare Workers.
 
@@ -28,7 +28,7 @@ https://discord.com/api/webhooks/<secret>
 and point your GitHub repository webhook (content type `application/json`) at:
 
 ```
-https://bdgw.aries.fyi/<secret>
+https://octohook.aries.fyi/<secret>
 ```
 
 ### Filtering
@@ -62,4 +62,4 @@ pnpm test
 pnpm run deploy
 ```
 
-Deploying needs a [Cloudflare Queue](https://developers.cloudflare.com/queues/) named `bdgw-webhooks` (see `wrangler.jsonc`) and your own route in place of `bdgw.aries.fyi`.
+Deploying needs a [Cloudflare Queue](https://developers.cloudflare.com/queues/) named `octohook-webhooks` (see `wrangler.jsonc`) and your own route in place of `octohook.aries.fyi`.
