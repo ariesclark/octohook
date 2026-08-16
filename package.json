@@ -1,16 +1,27 @@
 {
-	"name": "better-github-discord-webhook",
-	"type": "module",
-	"scripts": {
-		"dev": "wrangler dev",
-		"deploy": "wrangler deploy --minify",
-		"cf-typegen": "wrangler types --env-interface CloudflareBindings"
-	},
-	"dependencies": {
-		"hono": "^4.13.2"
-	},
-	"devDependencies": {
-		"@types/node": "^26.2.0",
-		"wrangler": "^4.123.0"
-	}
+  "name": "better-github-discord-webhook",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "node --test src/*.test.ts",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt --check",
+    "format:write": "oxfmt --write"
+  },
+  "dependencies": {
+    "@octokit/openapi-webhooks": "^12.1.0",
+    "@octokit/openapi-webhooks-types": "^12.1.0",
+    "hono": "^4.13.2",
+    "liqe": "^3.8.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "oxfmt": "^0.63.0",
+    "oxlint": "^1.78.0",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.123.0"
+  }
 }

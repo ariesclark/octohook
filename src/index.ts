@@ -1,9 +1,7 @@
-import { Hono } from "hono";
+import app from "./app";
+import { queue, WebhookQueueMessage } from "./queue";
 
-const app = new Hono<{ Bindings: CloudflareBindings }>();
-
-app.get("/message", (c) => {
-  return c.text("Hello Hono!");
-});
-
-export default app;
+export default {
+  ...app,
+  queue,
+} satisfies ExportedHandler<CloudflareBindings, WebhookQueueMessage>;
