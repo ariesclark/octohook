@@ -151,6 +151,64 @@ export async function mergeRequestsWithSources(
   });
 }
 
+/** A drawn message, as much of one as merging needs to know. */
+export type Drawn = {
+  key: string;
+  at: string;
+  content: unknown;
+  /** False for anything that can still grow: a board is torn apart by being folded into a run. */
+  merges?: boolean;
+};
+
+function voiceOf(content: unknown): string {
+  const { username, avatar_url: avatar } = (content ?? {}) as {
+    username?: string;
+    avatar_url?: string;
+  };
+
+  return JSON.stringify([username, avatar]);
+}
+
+/**
+ * Two things said in the same voice a moment apart are one thing happening, and read as two
+ * messages only because GitHub sent two deliveries. The group keeps the key of the message it
+ * started as, so it holds the id it was first posted under however many more join it.
+ *
+ * Only what is finished merges. A push grows a board beneath it as its checks report, and one
+ * folded into a neighbour would have to be torn back out the moment the first of them arrived.
+ */
+export function mergeAdjacent<T extends Drawn>(entries: T[], window: number): T[] {
+  const merged: T[] = [];
+
+  for (const entry of entries) {
+    const previous = merged[merged.length - 1];
+
+    const joins =
+      entry.merges &&
+      previous?.merges &&
+      voiceOf(previous.content) === voiceOf(entry.content) &&
+      Date.parse(entry.at) - Date.parse(previous.at) <= window;
+
+    if (!joins) {
+      merged.push(entry);
+      continue;
+    }
+
+    const before = previous.content as { components?: MessageComponent[] };
+    const after = entry.content as { components?: MessageComponent[] };
+
+    merged[merged.length - 1] = {
+      ...previous,
+      content: {
+        ...before,
+        components: [...(before.components ?? []), ...(after.components ?? [])],
+      },
+    };
+  }
+
+  return merged;
+}
+
 export async function mergeRequests(
   requests: Request[],
   options?: MergeOptions,

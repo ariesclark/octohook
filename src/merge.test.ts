@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { mergeRequests, mergeRequestsWithSources } from "./merge.ts";
+import { mergeAdjacent, mergeRequests, mergeRequestsWithSources } from "./merge.ts";
 
 const secretA = "111111/token-a";
 const secretB = "222222/token-b";
@@ -442,5 +442,93 @@ describe("completeness", () => {
 
     assert.equal(merged.length, 1);
     assert.deepEqual(await lines(merged), expected);
+  });
+});
+
+describe("mergeAdjacent", () => {
+  const drawn = (key: string, at: string, content: string, voice = "octohook") => ({
+    key,
+    at,
+    content: { username: voice, components: [{ content }] },
+    merges: true,
+  });
+
+  // Two stars a moment apart are one thing happening, and read as two messages only because
+  // GitHub sent two deliveries. The queue used to fold them together on the way out; drawing the
+  // channel from a world has to do it here, or it stops happening on every redraw.
+  it("says two things in one voice, a moment apart, as one message", () => {
+    const merged = mergeAdjacent(
+      [drawn("a", "2026-08-21T01:00:00Z", "one"), drawn("b", "2026-08-21T01:00:30Z", "two")],
+      60_000,
+    );
+
+    assert.equal(merged.length, 1);
+    assert.deepEqual(merged[0]!.content.components, [{ content: "one" }, { content: "two" }]);
+  });
+
+  // The first key, so the message keeps the id it was posted under as the group grows.
+  it("keeps the key of the message the group started as", () => {
+    const merged = mergeAdjacent(
+      [drawn("a", "2026-08-21T01:00:00Z", "one"), drawn("b", "2026-08-21T01:00:30Z", "two")],
+      60_000,
+    );
+
+    assert.equal(merged[0]!.key, "a");
+    assert.equal(merged[0]!.at, "2026-08-21T01:00:00Z");
+  });
+
+  it("keeps two things further apart than the window separate", () => {
+    const merged = mergeAdjacent(
+      [drawn("a", "2026-08-21T01:00:00Z", "one"), drawn("b", "2026-08-21T01:05:00Z", "two")],
+      60_000,
+    );
+
+    assert.equal(merged.length, 2);
+  });
+
+  it("keeps two voices apart however close together they are", () => {
+    const merged = mergeAdjacent(
+      [
+        drawn("a", "2026-08-21T01:00:00Z", "one", "octohook"),
+        drawn("b", "2026-08-21T01:00:05Z", "two", "someone else"),
+      ],
+      60_000,
+    );
+
+    assert.equal(merged.length, 2);
+  });
+
+  // A push grows a board under it as its runs report. Merged into its neighbour it would have to
+  // be torn out again the moment the first check arrived.
+  it("never merges a message something can still be drawn under", () => {
+    const board = { ...drawn("a", "2026-08-21T01:00:00Z", "one"), merges: false };
+    const merged = mergeAdjacent([board, drawn("b", "2026-08-21T01:00:05Z", "two")], 60_000);
+
+    assert.equal(merged.length, 2);
+  });
+
+  it("does not reach across something that will not merge", () => {
+    const merged = mergeAdjacent(
+      [
+        drawn("a", "2026-08-21T01:00:00Z", "one"),
+        { ...drawn("b", "2026-08-21T01:00:05Z", "board"), merges: false },
+        drawn("c", "2026-08-21T01:00:10Z", "two"),
+      ],
+      60_000,
+    );
+
+    assert.deepEqual(
+      merged.map(({ key }) => key),
+      ["a", "b", "c"],
+    );
+  });
+
+  it("leaves a lone message exactly as it was drawn", () => {
+    const only = drawn("a", "2026-08-21T01:00:00Z", "one");
+    assert.deepEqual(mergeAdjacent([only], 60_000), [only]);
+  });
+
+  it("draws nothing from nothing", () => {
+    assert.deepEqual(mergeAdjacent([], 60_000), []);
   });
 });
