@@ -87,18 +87,17 @@ export function RunBoard({
   return (
     <message username="GitHub Actions" avatar_url={actionsAvatarUrl}>
       <text>
-        <b>
-          {lead(boardMark(jobs, deployments))}
-          {url ? <a href={url}>{title}</a> : title}
-          {ref ? (
-            <>
-              {" on "}
-              <Ref repository={repository} refName={ref} hook={hook} />
-            </>
-          ) : (
-            ""
-          )}
-        </b>
+        {"-# "}
+        {lead(boardMark(jobs, deployments))}
+        <b>{url ? <a href={url}>{title}</a> : title}</b>
+        {ref ? (
+          <>
+            {" on "}
+            <Ref repository={repository} refName={ref} hook={hook} />
+          </>
+        ) : (
+          ""
+        )}
         {summary ? ` • ${summary}` : ""}
         {rows.length > 0 ? <br /> : ""}
         {rows}
@@ -124,8 +123,6 @@ export function CommitBoard({
   entries: CommitBoardEntry[];
   repository: { name: string; full_name?: string; html_url: string };
 }): WebhookContent {
-  let separated = false;
-
   return (
     <message username="GitHub Actions" avatar_url={actionsAvatarUrl}>
       {entries.flatMap((entry) => {
@@ -143,16 +140,11 @@ export function CommitBoard({
           ? `${workflowName(entry.run.name)} #${entry.run.runNumber}`
           : (entry.title ?? entry.runId);
 
-        const spacer =
-          separated && rows.length > 0 ? [<separator divider={false} spacing={1} />] : [];
-
-        separated = separated || rows.length > 0;
-
         return [
-          ...spacer,
           <text>
+            {"-# "}
             {lead(boardMark(entry.jobs, entry.deployments))}
-            {url ? <a href={url}>{title}</a> : title}
+            <b>{url ? <a href={url}>{title}</a> : title}</b>
             {summary ? ` • ${summary}` : ""}
             {rows.length > 0 ? <br /> : ""}
             {rows}

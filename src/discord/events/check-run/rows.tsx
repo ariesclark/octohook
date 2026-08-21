@@ -1,4 +1,3 @@
-import { checkMark, deploymentMark, lead } from "../../marks";
 import { t, tOf } from "../../messages.ts";
 import { summarise } from "../../../markdown/summary";
 import { annotationText, bySeverity, fileUrl, fold } from "./annotations.ts";
@@ -6,14 +5,12 @@ import { meetsAnnotationLevel } from "./run";
 import { checkDuration } from "./shared";
 
 /**
- * Everything a run contains steps into a quote, which is the one indent Discord draws a bar
- * beside — two ordinary spaces in a proportional font read as no indent at all. The run's own
- * name stays at the margin, so the bar marks exactly what belongs to it.
+ * Everything a run contains is small text, and the run's own name is the only line at reading
+ * size. That size step is the whole of the hierarchy, because nothing else survives: `> > ` draws
+ * the same single bar as `> `, two ordinary spaces are not an indent in a proportional font, and
+ * `-#` unsets whatever indent is placed on its line anyway.
  */
-const indent = "> ";
-
-/** A line beneath a job: what the job said, and what it deployed. */
-const detail = "> ";
+const small = "-# ";
 
 export type BoardJob = {
   name: string;
@@ -135,7 +132,7 @@ function Annotations({
 
     const line = (
       <>
-        {detail}
+        {small}
         {"- "}
         {url ? (
           <a href={url}>
@@ -158,11 +155,11 @@ function Annotations({
       ...(rest > 0 && index === listed.length - 1
         ? [
             <br />,
-            <small>
-              {detail}
+            <>
+              {small}
               {"- "}
               {t("annotation.more", { count: rest })}
-            </small>,
+            </>,
           ]
         : []),
     ];
@@ -182,9 +179,8 @@ function Deployment({
   return (
     <>
       <Break first={first} />
-      {under ? detail : indent}
+      {small}
       {under ? "- " : ""}
-      {lead(deploymentMark(deployment.state))}
       {tOf("deployment", deployment.state)}{" "}
       {deployment.url ? <a href={deployment.url}>{deployment.place}</a> : deployment.place}
     </>
@@ -197,22 +193,20 @@ function Job({
   sha,
   deployments,
   first,
-  spaced,
-}: Rows & { job: BoardJob; first: boolean; spaced: boolean }) {
+}: Rows & { job: BoardJob; first: boolean }) {
   const duration = checkDuration(job.startedAt, job.completedAt);
   const said = outputOf(job);
 
   return (
     <>
       <Break first={first} />
-      {indent}
-      {checkMark(job.conclusion)}
+      {small}
       <a href={job.url}>{job.name}</a>
       {duration ? ` • ${duration}` : ""}
       {said ? (
         <>
           <br />
-          {detail}
+          {small}
           {"- "}
           {said}
         </>
@@ -223,14 +217,6 @@ function Job({
       {deploymentsOf(job, deployments).map((deployment) => (
         <Deployment deployment={deployment} under />
       ))}
-      {spaced ? (
-        <>
-          <br />
-          {indent}
-        </>
-      ) : (
-        ""
-      )}
     </>
   );
 }
@@ -277,24 +263,13 @@ type Rows = {
  * on the line above: a run of quiet green jobs draws nothing here at all.
  */
 export function JobRows(rows: Rows) {
-  const drawn = rows.jobs.filter((job) => jobFailed(job) || jobTalks(job));
+  const drawn = rows.jobs.filter((job) => jobFailed(job) || jobSpeaks(job, rows.deployments));
   const loose = looseDeployments(drawn, rows.deployments);
 
   if (drawn.length + loose.length === 0) return [];
 
-  // A job that said something is a block, not a row; the next one starts far enough away to
-  // read as its own.
-  const last = drawn.length + loose.length - 1;
-
   return [
-    ...drawn.map((job, index) => (
-      <Job
-        {...rows}
-        job={job}
-        first={index === 0}
-        spaced={index < last && jobSpeaks(job, rows.deployments)}
-      />
-    )),
+    ...drawn.map((job, index) => <Job {...rows} job={job} first={index === 0} />),
     ...loose.map((deployment, index) => (
       <Deployment deployment={deployment} first={drawn.length === 0 && index === 0} />
     )),
