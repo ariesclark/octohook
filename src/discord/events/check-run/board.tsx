@@ -47,8 +47,8 @@ function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
   )
     return marks.bad;
 
-  if (jobs.some(({ conclusion }) => !conclusion)) return marks.active;
-  if (deployments.some(({ state }) => underway.has(state))) return marks.active;
+  if (jobs.some(({ conclusion }) => !conclusion)) return marks.quiet;
+  if (deployments.some(({ state }) => underway.has(state))) return marks.quiet;
 
   if (jobs.length === 0)
     return deployments.some(({ state }) => state === "success") ? marks.good : marks.quiet;

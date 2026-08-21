@@ -206,7 +206,7 @@ function Job({
     <>
       <Break first={first} />
       {indent}
-      {lead(checkMark(job.conclusion))}
+      {checkMark(job.conclusion)}
       <a href={job.url}>{job.name}</a>
       {duration ? ` • ${duration}` : ""}
       {said ? (

@@ -16,7 +16,6 @@ import {
   unredirectLinks,
 } from "../../../markdown/transform";
 import { Ref } from "../../components/ref";
-import { lead, pullRequestMark } from "../../marks";
 import { HookScope } from "../../refs";
 import { WebhookContent } from "../../types";
 import { displayUsername } from "../push/shared";
@@ -135,7 +134,6 @@ export function PullRequestMessage({
     <message {...identity(event)}>
       <text>
         <b>
-          {lead(pullRequestMark(action))}
           {open ? "wants to merge " : `${action} `}
           <Reference event={event} />
           {head ? (
