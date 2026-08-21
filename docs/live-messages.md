@@ -9,13 +9,14 @@ Written 2026-08-21, as a handoff.
 
 ## 0. Start here
 
-**The immediate question.** The channel object is built and passing, but **it has never run
-against real traffic** — no replay to Discord and no deploy since the port. That is the next
-thing: replay `last-push.jsonl` to the Spidey Bot channel and read it, then deploy.
+**The immediate question.** The channel object has never run against real traffic. `last-push.jsonl`
+replayed cleanly to Spidey Bot — 41 deliveries, one message, 29 edits, no refusals — but that went
+through `src/live.ts`, which holds the world in memory and draws on every delivery. The object's
+storage, its debounce and its alarm have only ever run under vitest. Deploying is the next thing,
+and §1 says what that needs.
 
-**Nothing is half-finished.** 262 tests pass under `node --test` and 7 under vitest, `tsc` and
-lint are clean, the worker builds, and a file replay of `last-push.jsonl` renders exactly as it
-did before the port. Start from the question above, not from archaeology.
+**Nothing is half-finished.** 268 tests pass under `node --test` and 10 under vitest, `tsc` and
+lint are clean, and the worker builds. Start from the question above, not from archaeology.
 
 **Decisions taken during the port**, all of them Aries's:
 
@@ -25,6 +26,8 @@ did before the port. Start from the question above, not from archaeology.
 - Everything goes through the channel, including events that never gather into a board, so one
   webhook has one sender.
 - SQLite storage, and `@cloudflare/vitest-plugin` for the tests.
+- The GitHub token comes off the hook's url, not a worker secret, and one carrying more than the
+  two lookups need is refused with a 400. See §9.
 
 **How the loop works here.** Change the code, replay real deliveries to the Spidey Bot channel,
 Aries looks and replies with a short correction. She is terse and action-oriented; a correction of
@@ -81,7 +84,7 @@ revoked; its value is deliberately not recorded here.
   its explicit `contentType: "v8"`, so the `Uint8Array` body was JSON-serialised and arrived as a
   plain object. `fromSerializedRequest` read `body.byteLength > 0`, got `undefined`, and built a
   bodyless request, which then failed far from its cause as `SyntaxError: Unexpected end of JSON
-  input` inside `mergeRequestsWithSources`. It now throws a `TypeError` naming the problem instead.
+input` inside `mergeRequestsWithSources`. It now throws a `TypeError` naming the problem instead.
 - `fix(options): match every event when no filter is given` — with both `defaultOptions` entries
   commented out and no `?include=`/`?exclude=`, the query string was empty; `parse("")` yields an
   `EmptyExpression` and liqe's `test` throws `Expected left to be defined.` on it. Every delivery
@@ -98,8 +101,8 @@ The worker builds at **816 KiB gzipped** (was 808 before the port, 741 before `m
 
 **Deploying it takes two things beyond `wrangler deploy`:**
 
-1. `wrangler secret put GITHUB_TOKEN`, or every board draws with no run names, numbers, triggers
-   or annotations.
+1. Put a GitHub token on each hook's url — `?token=…`. Without one every board draws with no run
+   names, numbers, triggers or annotations. There is no `GITHUB_TOKEN` secret any more; see §9.
 2. The `octohook-webhooks` queue is no longer consumed by anything. Deleting it will discard
    whatever is still in flight — a few stars and issue messages at worst.
 
@@ -405,7 +408,38 @@ it is not news — but it is silent.
 
 ---
 
-## 9. The flirtual side
+## 9. The hook's token
+
+The token rides on the hook's own url as `?token=…`, beside `?include=` and `?exclude=`. One
+worker no longer holds one credential for everybody, so two hooks pointing here can read two
+different organisations — and the token never reaches storage, because every lookup happens in
+`deliver` and the alarm that draws needs no credentials at all.
+
+The url is now a place a GitHub token lives. The Discord webhook secret was already in the path,
+so the url was always a credential, but a PAT is a broader one — and `observability.traces` is on,
+so request urls reach Cloudflare's dashboard.
+
+**A token carrying more than the two lookups need is refused with a 400**, naming the scopes to
+take off. That answer lands as a red delivery on the hook's own page in GitHub, which is the only
+place anybody would see it — hence the check at the edge rather than inside the object.
+
+What is needed and nothing else: `repo` on a private repository, `public_repo` or no scope at all
+on a public one. A fine-grained token is the better answer and needs neither — Actions read and
+Checks read — and reports no scopes header, so it passes untouched.
+
+`src/token.ts` asks `/rate_limit`, which answers for any token and is the one endpoint exempt from
+the limit it reports. One verdict per token for the life of the isolate. A token GitHub will not
+answer for passes and is asked about again next time: refusing every delivery because GitHub is
+having a bad minute trades a real outage for a question about how broad the operator's own
+credential is.
+
+Worth knowing: `gh auth token` carries `admin:org_hook, gist, read:org, repo, workflow` and is
+therefore refused. Replays through `src/live.ts` do not go near this check, so it still works
+there.
+
+---
+
+## 10. The flirtual side
 
 Not this repo, but it shapes what the log has to show. Tracked with the `flirtual` session.
 
@@ -424,7 +458,7 @@ Not this repo, but it shapes what the log has to show. Tracked with the `flirtua
 
 ---
 
-## 10. Verifying a change
+## 11. Verifying a change
 
 ```bash
 pnpm exec tsc --noEmit
