@@ -9,19 +9,22 @@ Written 2026-08-21, as a handoff.
 
 ## 0. Start here
 
-**The immediate question, unanswered.** Aries said "let's do the durable object" and asked for the
-research first (§8). Two decisions are waiting on her and should not be assumed:
+**The immediate question.** The channel object is built and passing, but **it has never run
+against real traffic** — no replay to Discord and no deploy since the port. That is the next
+thing: replay `last-push.jsonl` to the Spidey Bot channel and read it, then deploy.
 
-1. SQLite storage backend — it is the only live option, but it cannot be undone once deployed.
-2. Whether Durable Object tests justify `@cloudflare/vitest-plugin` pulling a second wrangler and
-   an alpha miniflare alongside the pinned 4.123.0.
+**Nothing is half-finished.** 262 tests pass under `node --test` and 7 under vitest, `tsc` and
+lint are clean, the worker builds, and a file replay of `last-push.jsonl` renders exactly as it
+did before the port. Start from the question above, not from archaeology.
 
-Also offered and not yet answered: installing `cloudflare/skills`, which ships a first-party
-`skills/durable-objects/` skill.
+**Decisions taken during the port**, all of them Aries's:
 
-**Nothing is half-finished.** The tree is clean, 243 tests pass, `tsc` and lint are clean, and the
-last replay went to the test channel successfully. Start from the question above, not from
-archaeology.
+- The object is one per **channel**, not one per commit. The plan in this document said
+  `repo@sha`; §8 records why that was wrong and what replaced it.
+- **No queue.** It was doing four jobs and the object took three; see §8.
+- Everything goes through the channel, including events that never gather into a board, so one
+  webhook has one sender.
+- SQLite storage, and `@cloudflare/vitest-plugin` for the tests.
 
 **How the loop works here.** Change the code, replay real deliveries to the Spidey Bot channel,
 Aries looks and replies with a short correction. She is terse and action-oriented; a correction of
@@ -84,11 +87,21 @@ revoked; its value is deliberately not recorded here.
   `EmptyExpression` and liqe's `test` throws `Expected left to be defined.` on it. Every delivery
   was 500ing. An empty query now matches everything without going near liqe.
 
-**Not deployed.** The whole fold/draw/deliver design below is a bun CLI (`src/live.ts`). The worker
-still renders one message per event through `src/discord/index.ts`. Confirmed by inspecting the
-built bundle: `MessageFormat` and `run.deploying` are present, `emptyWorld` and `ownerOf` are not.
+**Built, not deployed.** The fold/draw/deliver design is now the worker's only path, in
+`src/channel.ts`. Confirmed by inspecting the built bundle: `Channel` is exported, `ownerOf`,
+`forget`, `mergeAdjacent` and `deliverAll` are all present, and `WEBHOOK_QUEUE` is gone.
 
-The worker builds at **808 KiB gzipped** (was 741 KiB before `messageformat`).
+Nothing of this has met real traffic yet. The last thing verified against captured deliveries was
+a file replay, which draws the same channel it drew before the port.
+
+The worker builds at **816 KiB gzipped** (was 808 before the port, 741 before `messageformat`).
+
+**Deploying it takes two things beyond `wrangler deploy`:**
+
+1. `wrangler secret put GITHUB_TOKEN`, or every board draws with no run names, numbers, triggers
+   or annotations.
+2. The `octohook-webhooks` queue is no longer consumed by anything. Deleting it will discard
+   whatever is still in flight — a few stars and issue messages at worst.
 
 ---
 
@@ -97,23 +110,35 @@ The worker builds at **808 KiB gzipped** (was 741 KiB before `messageformat`).
 Three pieces, in a line. An event never decides what a message looks like.
 
 ```
-delivery ──▶ apply(world, delivery, resolved)   src/state.ts     fold
+                     src/app.ts        render a note, trim the payload, hand it over
+                            │
+                            ▼
+delivery ──▶ resolveFor(delivery, github)        src/resolve.ts   look everything up first
+                     │
+                     ▼
+             apply(world, delivery, resolved)    src/state.ts     fold
                      │
                      ▼
              compose(world, repository)          src/compose.tsx  draw
                      │
                      ▼
-             deliver(key, content)               src/live.ts      send only what changed
+             deliverAll(composed, transport)     src/deliver.ts   send only what changed
 ```
 
-- **`src/state.ts`** — the world and `apply`. Pure, no I/O, returns a sentence describing what it
-  changed. Anything needing the network (a run's name, a check's annotations) is resolved by the
-  caller and passed in as `Resolved`. This purity is what keeps the tests runnable under
-  `node --test`, and it is what makes the Durable Object port tractable.
+- **`src/state.ts`** — the world, `apply`, and `forget`. Pure, no I/O, returns a sentence
+  describing what it changed. Anything needing the network is resolved by the caller and passed
+  in as `Resolved`. That purity is what lets the fold run synchronously inside a Durable Object,
+  which is the whole reason two deliveries at once cannot lose each other.
+- **`src/resolve.ts`** — every lookup an event needs, in front of the fold rather than inside it.
 - **`src/compose.tsx`** — draws the entire channel from the world, every time. Same world, same
   messages. Each carries a stable key.
-- **`src/live.ts`** — folds, draws, and sends only the composed messages whose JSON changed;
-  takes down any the world no longer draws.
+- **`src/deliver.ts`** — sends only the composed messages whose JSON changed, takes down any the
+  world no longer draws, and holds the Discord and dry transports.
+- **`src/channel.ts`** — the Durable Object: one per webhook, storage for the world and the
+  message ids, and the alarm that draws.
+- **`src/foldable.ts`** — which events belong to a commit, and what of an event travels.
+- **`src/live.ts`** — the same three steps against captured deliveries, holding the world in
+  memory for as long as the replay runs.
 - **`src/render.ts`** — a transport that writes the channel to a markdown file instead of Discord.
 
 Because compose reads only the world, arrival order stops mattering. The bug where a deployment
@@ -141,7 +166,7 @@ the style is not drawing, falls back to being a child of the run.
 already said. It earns a row once it has a host to visit or has failed to reach one; until then it
 appears in the run's summary as `2 deploying`.
 
-**Only what needs attention is drawn.** A job is drawn if it failed *or* it said something — an
+**Only what needs attention is drawn.** A job is drawn if it failed _or_ it said something — an
 annotation, or its own `output.title`/`summary`. A run of quiet green jobs draws nothing beneath
 its header. This is what makes `Preview deployed — → https://277.flirtual.dev` visible, since that
 check passes.
@@ -206,12 +231,12 @@ jq's float parsing** — extract them with a JSON parser that keeps integers exa
 
 Under `.claude/tmp/webhook-log-readability/` (gitignored, regenerable):
 
-| file | contents |
-|---|---|
-| `day.jsonl` | 388 deliveries, one full day |
-| `tail.jsonl` | 143, from the second-to-last push |
-| `last-push.jsonl` | 41, the last push only |
-| `pr-277.jsonl` | 158, everything touching PR #277 |
+| file              | contents                          |
+| ----------------- | --------------------------------- |
+| `day.jsonl`       | 388 deliveries, one full day      |
+| `tail.jsonl`      | 143, from the second-to-last push |
+| `last-push.jsonl` | 41, the last push only            |
+| `pr-277.jsonl`    | 158, everything touching PR #277  |
 
 ```bash
 # to a markdown file, no delay
@@ -238,106 +263,145 @@ absent — the board still draws, with less in it.
   then the message is far up-channel and nothing announces the change. A failure probably deserves
   something that interrupts.
 - **Split hysteresis.** Content crossing 4000 characters downward deletes the spare message;
-  crossing back up posts a new one at the *bottom* of the channel, detached from the first.
+  crossing back up posts a new one at the _bottom_ of the channel, detached from the first.
   Observed in a dry run (`dry-78, dry-90` → `dry-78` → `dry-78, dry-97`).
 - **A commit board's message moves** when a late push claims runs that were drawing on their own:
   the run message is taken down and the push message appears at the bottom.
 - **Multipart messages** (an event carrying an avatar) deliver their words but drop the attachment.
+  The channel object makes this worse, not better: `app.ts` now unwraps `payload_json` and throws
+  the parts away.
 - **`preview` reports its URL twice** on a green run — once from the deployment status, once from
   the check's own summary. Different sources, same fact.
+- **Nothing paces Discord.** `discordTransport` retries a 429 and that is all. The channel object
+  is now the one place that could hold a bucket; it does not yet.
 
 ---
 
-## 8. Next: the Durable Object
+## 8. The channel object
 
-Researched 2026-08-21 against wrangler 4.123.0, workerd 1.20260811.1, `compatibility_date`
-2026-08-16. The worker currently declares **no storage binding at all** — only the queue.
+Built 2026-08-21 against wrangler 4.125.0, `compatibility_date` 2026-08-16. This section used to
+be a plan for one object per `${repository.full_name}@${sha}`. That plan was wrong in two ways and
+the reasoning is worth keeping, because both mistakes are the kind that read as good practice.
 
-### Recommendation: Durable Objects directly, no library
+### Why not one object per commit
 
-One SQLite-backed object per `${repository.full_name}@${sha}`. Every foldable event already carries
-the sha (`check_run.head_sha`, `check_suite.head_sha`, `deployment.sha`, `push.after`,
-`pull_request.head.sha`), so the edge routes with no API call. Sha-less events (issues, star,
-delete, vulnerability alert) keep today's fire-and-forget path.
+**It was mis-keyed.** The route is `/:secret`, so nothing stops one repository being wired to two
+webhooks. `repo@sha` collides across them: one set of message ids, and the second channel never
+drawn. The key had to carry the channel either way — so the atom was never "a commit", it was
+"a commit in a channel".
 
-**The correctness trap, and it is the whole reason the design is shaped this way.** A Durable
-Object is *not* safe for read-modify-write across an await:
+**It threw away what only the channel can see.** `compose(world, repository)` already _is_ a
+channel-level function: it draws every message from one world and orders them against each other.
+Sharded per commit, each object holds a fragment, and three things stop being expressible:
+
+- **The rate limit.** One webhook is one bucket. The old plan admitted this and bolted on "a
+  singleton token-bucket DO per webhook" to compensate.
+- **Resurfacing** (§7: a check finishing 34 minutes later, far up-channel). Deciding to repost
+  needs to know what is below it.
+- **Ordering** between boards, for the same reason.
+
+Per-commit bought sha-based routing and free eviction, then needed a second object to hand back
+what it had discarded. One object per webhook — `Channel`, named by the webhook id, not the token,
+so rotating the token does not orphan the channel's messages.
+
+The cost, and it is real: a channel's deliveries serialise through one object. At flirtual's ~388
+deliveries a day that is nothing, and the per-delivery work is a fold plus a compose either way.
+A genuinely hot channel would queue behind it.
+
+### Why there is no queue
+
+The queue predated the fold and was doing four jobs. The object took three:
+
+- **Ordering** a batch by `occurredAt` — dead weight. Arrival order stopped mattering the moment
+  compose started drawing from a world. That was the point of the rewrite.
+- **Merging** nearby messages — the alarm's debounce does it, and better: it coalesces _edits_ to
+  one message rather than concatenating separate ones.
+- **Getting off the response path** — `waitUntil` already did that. The old "fine behind a queue,
+  not inline" worry was about per-commit objects paying first-touch latency on an always-new name.
+  A channel object is named by the webhook id: the same handful of names forever, created once.
+- **Retry** — the only one left, and small. `fold()` in `app.ts` retries three times with backoff,
+  and the alarm already retries the part that talks to Discord.
+
+`src/queue.ts` and `src/serialize.ts` are gone, and with them the 128 KB message cap that forced
+payload trimming. `foldablePayload` stayed anyway — a raw push is mostly a list of commits nothing
+reads, and the trimmed payload is what gets written to storage.
+
+Everything goes through the channel now, including events that gather into nothing. A star is a
+note in the world with no runs under it, posted once and then drawn identically forever. That kept
+one webhook to one sender, and it is what `mergeAdjacent` is for.
+
+### The correctness trap, which the design still turns on
+
+A Durable Object is _not_ safe for read-modify-write across an await:
 
 > "Input gates block new events while synchronous JavaScript execution is in progress. Awaiting
 > async operations like `fetch()` … opens the input gate, allowing other requests to interleave."
 > — https://developers.cloudflare.com/durable-objects/best-practices/rules-of-durable-objects/
 
-A naive port of `live.ts` — resolve, apply, send — reopens exactly the race the DO was meant to
-close. The fix is structural:
+A naive port — resolve, apply, send — reopens exactly the race the object was meant to close. The
+fix is structural, and it survived the reshaping unchanged:
 
-1. **Resolve first.** All GitHub lookups happen before the world is touched.
+1. **Resolve first.** Every GitHub lookup happens before the world is touched.
 2. **Fold synchronously** with `ctx.storage.kv` (the sync API, `worker-configuration.d.ts:3478`).
-   No await means the input gate never opens mid-fold. `apply()` is already pure and synchronous,
-   so the whole fold is one uninterruptible block.
-3. **Send from `alarm()`**, never inline — which also coalesces ten deliveries into one PATCH.
+   No await means the input gate never opens mid-fold. `apply()` is pure and synchronous, so the
+   read, the fold and the write are one uninterruptible block. The `setAlarm` at the end is
+   awaited _after_ the last write, which is safe: a delivery that interleaves there reads the
+   world this one just put.
+3. **Send from `alarm()`**, never inline — which also turns ten deliveries into one PATCH.
 
-Cloudflare's own DO skill prescribes a different remedy (optimistic locking with version numbers,
-or `transaction()`). Resolve-before-fold was preferred because it makes interleaving impossible
-rather than detecting and retrying it, and a retry around this reducer would re-issue its GitHub
-calls. Worth deciding deliberately rather than inheriting.
+Cloudflare's own DO skill prescribes optimistic locking or `transaction()` instead. Resolve-first
+was preferred because it makes interleaving impossible rather than detecting and retrying it, and
+a retry around this reducer would re-issue its GitHub calls. There is a test for it:
+_"loses neither of two deliveries folded at once"_.
 
-### Sketch
+### Storage
 
-```jsonc
-"durable_objects": { "bindings": [{ "name": "COMMIT", "class_name": "Commit" }] },
-"exports": { "Commit": { "type": "durable-object", "storage": "sqlite" } }
-```
+All via `ctx.storage.kv`, on a SQLite-backed class:
 
-Storage keys, all via `ctx.storage.kv`: `world`, `meta` (repository, hook, secret),
-`sent:<composeKey>` (`{ ids, drawn }`), `flushAt`, `deadlineAt` — the last two multiplexed onto the
-single alarm slot.
+| key                       | holds                                                                     |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `world`                   | the whole channel's world, `Map` and all — structured clone keeps it      |
+| `meta`                    | the webhook secret, the hook scope, and the last repository seen          |
+| `sent:<composeKey>`       | `{ ids, drawn }` for one composed message                                 |
+| `flushAt`, `pendingSince` | the debounce: draw 2s after the last delivery, 15s after the first        |
+| `revision`                | bumped on every fold, so the alarm knows whether it drew the latest world |
 
-Flow: `app.ts` enqueues the raw delivery → the consumer groups a batch by `repo@sha` and makes one
-RPC call per key → `deliver()` resolves, then folds synchronously, then schedules → `alarm()`
-composes, diffs against `sent:*`, and writes to Discord.
+`revision` is what makes the flush safe against a delivery arriving mid-draw. The alarm draws,
+compares the revision it drew against the current one, and only clears the pending flush if they
+match. Do not use `getAlarm()` for this — it returns null while an alarm is running.
 
-`state.ts` and `compose.tsx` need no changes.
+The world does not grow forever: `forget(world, before)` drops runs that stopped reporting more
+than six hours ago, and the notes nothing surviving belongs to. It returns the composed keys it
+dropped so their `sent:` entries go in the same breath — a forgotten message has to be **left
+where it is** in the channel, and anything still holding its id would read the absence as "no
+longer true" and take it down.
+
+Retention is measured against when a thing _happened_, not when it arrived. An event delivered
+more than six hours after the fact is folded and forgotten in the same call. That is coherent —
+it is not news — but it is silent.
 
 ### Gotchas that hit this design
 
-- **Module-level globals break in a DO.** `run.ts` holds `token` and the `runs`/`suites` caches at
-  module scope; instances share an isolate. The token must be read from `env` inside the object.
-- **Queue messages cap at 128 KB.** Raw `push` payloads can exceed it — strip to what `apply` reads.
-- **Every commit pays first-touch latency.** A name-derived id's first use does a global uniqueness
-  check of a few hundred milliseconds, and our ids are always new. Fine behind a queue; not fine
-  inline on the webhook response.
-- **Objects never collect themselves.** The deadline alarm must `deleteAll()` or every commit bills
-  forever.
-- **Alarms are at-least-once**, retried with backoff up to 6 times. The flush is already idempotent
-  via the `drawn` comparison; use `alarmInfo.isRetry` to avoid re-POSTing a message whose id failed
-  to persist.
-- **Do not trust `getAlarm()` for debounce state** — it returns null while an alarm is running.
-  Keep `flushAt`/`deadlineAt` in storage as the source of truth.
-- **`ctx.waitUntil` does nothing inside a DO.**
+- **Module-level globals break in a DO.** `run.ts` used to hold the token and its caches at module
+  scope; instances share an isolate, so that is one channel's credentials in another's hands. It
+  is now `createGithub(token)`, one client per object, held as an instance field.
 - **Hibernation discards in-memory state** after ~10s idle, eviction at 70–140s, and on every
-  deploy. The `sent` map and the world must live in storage.
-- **Per-object pacing is not enough for Discord.** Separate commits are separate objects hitting
-  the same webhook bucket; a busy repo likely needs a singleton token-bucket DO per webhook.
+  deploy. The world and the `sent` map live in storage; the GitHub cache does not, and losing it
+  costs a request. There is a test: _"keeps the message it holds across being evicted"_.
+- **Alarms are at-least-once.** Ids are written as each message is captured rather than at the end
+  of the flush, so a crash between two sends leaves ids to reuse rather than orphans.
+- **`ctx.waitUntil` does nothing inside a DO.**
+- **An alarm fired early is harmless.** The handler used to bail if the wall clock had not reached
+  `flushAt`, which made it untestable — `runDurableObjectAlarm` exists to fire early. The guard is
+  gone: drawing sooner than the debounce asked for is only less patient, and the revision check
+  makes it self-correcting.
 
-### Two decisions still open
+### Still open
 
-1. **SQLite backend is one-way.** `new_sqlite_classes` cannot be applied to an already-deployed
-   class, and key-value-backed namespaces cannot be created on new accounts. It is the only live
-   option, but it cannot be undone.
-2. **Testing costs a dependency.** `node --test` cannot exercise a DO.
-   `@cloudflare/vitest-plugin` (v1.0.0, published 2026-08-20) gives `runDurableObjectAlarm` and
-   `evictDurableObject` — exactly what this needs — but pulls a second wrangler alongside 4.123.0
-   plus an alpha miniflare. Wrangler's own `createTestHarness()` cannot fire an alarm early, which
-   for a design where the alarm *is* the delivery mechanism is disqualifying.
-
-Also worth installing before starting: `cloudflare/skills` ships a first-party
-`skills/durable-objects/` skill.
-
-### Unverified
-
-Minimum useful alarm granularity; whether a pending alarm alone incurs duration billing; whether
-GitHub's fan-out for one commit reliably lands in a single queue batch (designed as if it does not);
-Discord's per-channel edit rate limit (deliberately unpublished — read the headers).
+- **Discord's per-channel edit rate limit** is deliberately unpublished. Nothing paces sends yet
+  beyond the 429 retry in `discordTransport` — the object is now the one place that _could_.
+- Minimum useful alarm granularity, and whether a pending alarm alone incurs duration billing.
+- The old `src/replay.ts` and `src/a.ts` still use `mergeRequests` and predate all of this.
 
 ---
 
@@ -346,7 +410,7 @@ Discord's per-channel edit rate limit (deliberately unpublished — read the hea
 Not this repo, but it shapes what the log has to show. Tracked with the `flirtual` session.
 
 - **Double CI runs are deliberate.** `frontend.yaml`, `api.yaml` and `deploy-classification.yaml`
-  trigger on both `push` and `pull_request`, and the two runs deploy *different* previews — a SHA
+  trigger on both `push` and `pull_request`, and the two runs deploy _different_ previews — a SHA
   preview for the branch push, a PR-numbered one once a PR exists. Restricting the push trigger
   would kill pre-PR previews. 38 of the last 100 PRs came from forks, so dropping `pull_request`
   is off the table too.
@@ -364,17 +428,31 @@ Not this repo, but it shapes what the log has to show. Tracked with the `flirtua
 
 ```bash
 pnpm exec tsc --noEmit
-node --test "src/**/*.test.ts"      # 243 tests; pnpm test misses the nested ones
+pnpm test                           # 262 under node --test, then 7 under vitest
 pnpm lint
 pnpm exec wrangler deploy --dry-run --outdir /tmp/dist
 ```
 
-`pnpm test` only globs `src/*.test.ts` and `packages/*/src/*.test.ts`, so it runs 52 of the 243.
-Use the recursive glob.
+`pnpm test` used to glob `src/*.test.ts` and miss every nested file. It runs both suites now.
 
 Tests live where the logic is pure: `state.ts`, `annotations.ts`, `limits.ts`, `messages.ts`,
-`run.ts`, `merge.ts`, `options.ts`, `serialize.ts`. The JSX renderers have none — they are verified
-by replaying real deliveries and reading the output.
+`run.ts`, `merge.ts`, `options.ts`. The JSX renderers have none — they are verified by replaying
+real deliveries and reading the output.
+
+`test/channel.test.ts` is the exception, and runs under vitest because `node --test` cannot fire
+an alarm. Two things about it bite:
+
+- **Give every test its own channel name.** Storage outlives a test in this pool, and a channel
+  still holding the last test's world draws it again.
+- **Never write a date into a fixture.** Retention is measured against when a thing happened, so a
+  dated fixture is forgotten in the same call that folds it. Use `secondsAgo`, and take each
+  moment _once_ — a note's identity is its timestamp, so asking twice makes two messages.
+
+The vitest config carries one workaround worth knowing about: `discord-api-types`' module build is
+a shim that reads every name off a CommonJS default import, and that default lands as `undefined`
+in this pool. A resolver plugin points at the CommonJS file instead. Rewriting the pool's resolve
+conditions looks like the tidier fix and is not — `photon` asks for `workerd` and gets handed
+`node`, which then tries to compile WebAssembly and is refused.
 
 ---
 
