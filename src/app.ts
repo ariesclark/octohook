@@ -1,4 +1,4 @@
-import { env, waitUntil } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 
 import { getWebhookRequest } from "./discord";
@@ -20,9 +20,10 @@ async function contentOf(request: Request): Promise<unknown> {
 }
 
 /**
- * GitHub does not send an event twice once it has a 2xx, so a delivery dropped here is gone. The
- * channel is one object and a call to it fails only transiently — long enough to be worth asking
- * again, not long enough to be worth a queue in front of it.
+ * GitHub does not send an event twice once it has a 2xx, so a delivery dropped here is gone —
+ * which is why this is awaited before answering rather than left to `waitUntil`. A failure that
+ * outlives the retries becomes a 5xx, and a red delivery on the hook's own page is something a
+ * person can see and replay.
  */
 async function fold(channel: string, batch: Batch) {
   for (let attempt = 0; ; attempt++) {
@@ -73,16 +74,21 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
 
   // A hook carries its own token rather than the worker holding one for everybody, so two hooks
   // pointing here can read two different organisations.
-  waitUntil(
-    fold(secret.split("/")[0]!, {
+  try {
+    const outcome = await fold(secret.split("/")[0]!, {
       secret,
       hook,
       token,
       deliveries: [delivery],
-    }),
-  );
+    });
 
-  return json({ message: "Event accepted." }, { status: 202 });
+    return json({ message: "Event accepted.", ...outcome }, { status: 202 });
+  } catch (error) {
+    return json(
+      { message: "The channel would not take it.", reason: String(error) },
+      { status: 503 },
+    );
+  }
 });
 
 export default app;

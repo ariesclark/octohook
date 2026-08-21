@@ -44,6 +44,15 @@ const maximumWait = 15_000;
  */
 const retention = 48 * 60 * 60 * 1000;
 
+/** What the fold made of a batch, said back to whoever handed it over. */
+export type Outcome = {
+  /** One sentence per delivery, as `apply` describes it; empty where nothing changed. */
+  changed: string[];
+  revision: number;
+  /** When the channel will next be drawn. */
+  drawAt: number;
+};
+
 export type Batch = {
   secret: string;
   hook: HookScope;
@@ -81,7 +90,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
    * close. Once the last lookup is done the fold runs to completion with no await in it, and no
    * other delivery can see the world between the read and the write.
    */
-  async deliver({ secret, hook, token, deliveries }: Batch): Promise<number> {
+  async deliver({ secret, hook, token, deliveries }: Batch): Promise<Outcome> {
     const github = this.#githubFor(token);
     const resolved = [];
 
@@ -109,8 +118,10 @@ export class Channel extends DurableObject<CloudflareBindings> {
     }
 
     let last = kv.get<Meta>("meta")?.repository;
+    const changed: string[] = [];
+
     for (const [delivery, values] of resolved) {
-      apply(world, delivery, values);
+      changed.push(apply(world, delivery, values));
       last = (delivery.payload.repository as Repository | undefined) ?? last;
     }
 
@@ -119,8 +130,10 @@ export class Channel extends DurableObject<CloudflareBindings> {
 
     for (const [id, entry] of world.runs) kv.put(`run:${id}`, entry);
 
+    const revision = (kv.get<number>("revision") ?? 0) + 1;
+
     kv.put("notes", world.notes);
-    kv.put("revision", (kv.get<number>("revision") ?? 0) + 1);
+    kv.put("revision", revision);
     kv.put("pendingSince", pendingSince);
     kv.put("flushAt", flushAt);
     if (last) kv.put("meta", { secret, hook, repository: last } satisfies Meta);
@@ -129,7 +142,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
     // interleaves here reads the world this one just put rather than the one it read.
     await this.ctx.storage.setAlarm(flushAt);
 
-    return flushAt;
+    return { changed, revision, drawAt: flushAt };
   }
 
   /**

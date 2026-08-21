@@ -8,7 +8,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * delivery on the hook's own page is the only place anybody would see the problem.
  */
 
+/** Storage outlives a test in this pool, and the revision counts folds for the life of a channel. */
+let nth = 0;
+let channel = "";
+
 beforeEach(() => {
+  channel = `hook-${++nth}`;
+
   vi.stubGlobal("fetch", async (input: RequestInfo) => {
     const url = typeof input === "string" ? input : (input as Request).url;
 
@@ -18,7 +24,7 @@ beforeEach(() => {
 });
 
 function deliver(query = "") {
-  return SELF.fetch(`https://octohook.test/1234/webhook-token${query}`, {
+  return SELF.fetch(`https://octohook.test/${channel}/webhook-token${query}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-github-event": "star" },
     body: JSON.stringify({
@@ -50,5 +56,17 @@ describe("a hook without a token", () => {
 
   it("is accepted once the url carries one", async () => {
     expect((await deliver("?token=a-token")).status).toBe(202);
+  });
+
+  it("says what the fold made of it", async () => {
+    const response = await deliver("?token=a-token");
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({
+      message: "Event accepted.",
+      changed: ["noted star.created"],
+      revision: 1,
+      drawAt: expect.any(Number),
+    });
   });
 });
