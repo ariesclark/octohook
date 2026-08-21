@@ -1,0 +1,14 @@
+{
+  "name": "@ariesclark/discord-jsx",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts"
+  },
+  "dependencies": {
+    "@ariesclark/markdown-jsx": "workspace:*",
+    "discord-api-types": "^0.38.53"
+  }
+}

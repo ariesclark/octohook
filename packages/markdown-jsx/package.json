@@ -1,0 +1,10 @@
+{
+  "name": "@ariesclark/markdown-jsx",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts"
+  }
+}
