@@ -256,7 +256,9 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.repository ??= repositoryIn(payload);
     entry.sha ??= deployment.sha;
 
-    const url = status?.environment_url || status?.target_url;
+    // Only `environment_url` names a host. `target_url` is a deprecated alias of `log_url` and
+    // names the job, which is not somewhere the deployment went.
+    const url = status?.environment_url || undefined;
     const place = status?.environment_url
       ? new URL(status.environment_url).host
       : (status?.environment ?? deployment.environment);

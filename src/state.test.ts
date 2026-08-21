@@ -93,6 +93,34 @@ describe("apply", () => {
     assert.equal(deployments[0]!.place, "abc1234.example.dev");
   });
 
+  // `target_url` is a deprecated alias of `log_url`: both name the job, neither names a host.
+  // Taken as somewhere to visit it sends a reader back to the job the row already sits under.
+  test("gives a deployment nowhere to visit until a host says so", () => {
+    const world = emptyWorld();
+    const job = "https://github.com/o/r/actions/runs/1/job/2";
+
+    apply(
+      world,
+      delivery("deployment_status", "created", {
+        deployment: { id: 5, environment: "canary", sha: "abc1234" },
+        deployment_status: {
+          state: "success",
+          environment: "canary",
+          environment_url: "",
+          target_url: job,
+          log_url: job,
+        },
+      }),
+      { runId: "7" },
+    );
+
+    const [deployment] = world.runs.get("7")!.deployments;
+
+    assert.equal(deployment!.url, undefined);
+    assert.equal(deployment!.place, "canary");
+    assert.equal(deployment!.jobUrl, job);
+  });
+
   test("names a deployment by its environment until it has a host", () => {
     const world = emptyWorld();
     apply(
