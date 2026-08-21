@@ -9,12 +9,35 @@ import { phrases, t, tOf } from "./messages.ts";
  * caller does not fill, both of which throw at the moment the log tries to speak.
  */
 describe("the catalogue", () => {
-  const values = { count: 2, done: 1, total: 2, minutes: 1, seconds: 2 };
+  const values = {
+    count: 2,
+    done: 1,
+    total: 2,
+    minutes: 1,
+    seconds: 2,
+    commits: "[2 new commits](https://example.test/compare)",
+    branch: "[main](https://example.test/tree/main)",
+    before: "[`abc1234`](https://example.test/commit/abc1234)",
+    after: "[`def5678`](https://example.test/commit/def5678)",
+    tag: "[v1](https://example.test/tree/v1)",
+    ref: "[main](https://example.test/tree/main)",
+    repository: "[flirtual](https://example.test)",
+  };
 
   test("every phrase renders, and says something", () => {
     for (const name of phrases) {
       assert.doesNotThrow(() => t(name, values), `${name} did not render`);
       assert.notEqual(t(name, values), "", name);
+    }
+  });
+
+  // What goes into a phrase here is markdown, and MessageFormat isolates a value by default —
+  // which puts an invisible control character inside a link Discord then has to read literally.
+  test("puts nothing invisible around what it is given", () => {
+    for (const name of phrases) {
+      const said = t(name, values);
+
+      assert.doesNotMatch(said, /[⁦-⁩]/, `${name} isolated its values`);
     }
   });
 });

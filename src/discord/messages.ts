@@ -29,7 +29,10 @@ function formatter(name: Phrase): MessageFormat {
   const known = formatters.get(name);
   if (known) return known;
 
-  const made = new MessageFormat(locale, catalogue[name]);
+  // Markdown, not prose: a value here is a link whose brackets and parentheses Discord has to
+  // read literally, and the isolating characters MessageFormat wraps them in by default arrive
+  // as invisible control codes in the middle of one.
+  const made = new MessageFormat(locale, catalogue[name], { bidiIsolation: "none" });
   formatters.set(name, made);
 
   return made;
@@ -39,7 +42,7 @@ function formatter(name: Phrase): MessageFormat {
  * What the log says. A phrase with nothing to fill in still goes through here: a word like
  * "passed" is as much a translation as a sentence is.
  */
-export function t(name: Phrase, values: Record<string, number> = {}): string {
+export function t(name: Phrase, values: Record<string, number | string> = {}): string {
   return formatter(name).format(values);
 }
 

@@ -14,8 +14,9 @@ export function getStarContent(event: StarEvent, _hook: HookScope): WebhookConte
     <message username={displayUsername(sender.login)} avatar_url={sender.avatar_url}>
       <text>
         <b>
-          {action === "deleted" ? "unstarred" : "starred"}{" "}
-          <a href={repository.html_url}>{repository.name}</a>
+          {t(action === "deleted" ? "star.removed" : "star.added", {
+            repository: <a href={repository.html_url}>{repository.name}</a>,
+          })}
         </b>
         {stars ? (
           <>

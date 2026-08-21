@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": [
+    {
+      "name": "i18next",
+      "specifier": "eslint-plugin-i18next"
+    }
+  ],
+  "rules": {
+    "i18next/no-literal-string": "warn"
+  }
+}

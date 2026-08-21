@@ -1,5 +1,6 @@
 import { Ref } from "../../components/ref";
 import { lead, marks } from "../../marks";
+import { t } from "../../messages.ts";
 import { WebhookContent } from "../../types";
 import { displayUsername, PushEvent, pushSender, PushVariantProps } from "./shared";
 
@@ -22,8 +23,10 @@ export function BranchCreated({ event, branch, hook }: PushVariantProps): Webhoo
   return (
     <RefMessage event={event}>
       <b>
-        {lead(marks.quiet)}created branch{" "}
-        <Ref repository={event.repository} refName={branch} hook={hook} />
+        {lead(marks.quiet)}
+        {t("push.branch", {
+          branch: <Ref repository={event.repository} refName={branch} hook={hook} />,
+        })}
       </b>
     </RefMessage>
   );
@@ -33,8 +36,10 @@ export function TagPushed({ event, branch, hook }: PushVariantProps): WebhookCon
   return (
     <RefMessage event={event}>
       <b>
-        {lead(marks.quiet)}pushed tag{" "}
-        <Ref repository={event.repository} refName={`refs/tags/${branch}`} hook={hook} />
+        {lead(marks.quiet)}
+        {t("push.tag", {
+          tag: <Ref repository={event.repository} refName={`refs/tags/${branch}`} hook={hook} />,
+        })}
       </b>
     </RefMessage>
   );

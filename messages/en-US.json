@@ -8,7 +8,7 @@
   "run.progress": "{$done :number} of {$total :number}",
   "run.checks": "checks",
   "annotation.more": ".input {$count :number}\n.match $count\none {{and one more}}\n*   {{and {$count} more}}",
-  "annotation.repeats": "×{$count :number}",
+  "annotation.repeats": "\u00d7{$count :number}",
   "duration.seconds": "{$seconds :number}s",
   "duration.minutes": "{$minutes :number}m {$seconds :number}s",
   "check.running": "is running",
@@ -39,5 +39,14 @@
   "deploy.failure": "failed to deploy",
   "deploy.error": "errored deploying",
   "deploy.inactive": "took down",
-  "star.count": ".input {$count :number}\n.match $count\none {{{$count} star}}\n*   {{{$count} stars}}"
+  "star.count": ".input {$count :number}\n.match $count\none {{{$count} star}}\n*   {{{$count} stars}}",
+  "push.headline": "pushed {$commits} to {$branch}",
+  "push.commits": ".input {$count :number}\n.match $count\none {{{$count} new commit}}\n*   {{{$count} new commits}}",
+  "push.forced": "force-pushed {$branch} from {$before} to {$after}",
+  "push.branch": "created branch {$branch}",
+  "push.tag": "pushed tag {$tag}",
+  "delete.branch": "deleted branch {$ref}",
+  "delete.tag": "deleted tag {$ref}",
+  "star.added": "starred {$repository}",
+  "star.removed": "unstarred {$repository}"
 }
