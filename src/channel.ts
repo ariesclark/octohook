@@ -94,6 +94,8 @@ export class Channel extends DurableObject<CloudflareBindings> {
     const { kv } = this.ctx.storage;
     const now = Date.now();
 
+    this.#migrate();
+
     // Only the runs this batch names. A run is its own key, so a delivery reads and rewrites the
     // one it is about rather than the whole channel — which is what lets the world be held for
     // days without every delivery paying for the length of it.
@@ -130,6 +132,23 @@ export class Channel extends DurableObject<CloudflareBindings> {
     return flushAt;
   }
 
+  /**
+   * Before every run had a key of its own the whole world was one, and an object deployed into
+   * that shape still holds it. Split on first sight, because a channel that reads its world as
+   * empty draws nothing — and `deliverAll` takes down every message the world no longer draws.
+   */
+  #migrate(): void {
+    const { kv } = this.ctx.storage;
+
+    const whole = kv.get<World>("world");
+    if (!whole) return;
+
+    for (const [id, entry] of whole.runs) kv.put(`run:${id}`, entry);
+
+    kv.put("notes", whole.notes);
+    kv.delete("world");
+  }
+
   /** Every run and every note, which only the drawing and the forgetting ever need together. */
   #world(): World {
     const { kv } = this.ctx.storage;
@@ -146,6 +165,8 @@ export class Channel extends DurableObject<CloudflareBindings> {
     // Nothing is waiting to be drawn. The alarm is only ever set to a pending flush, so this is
     // one that has already happened.
     if (kv.get<number>("flushAt") === undefined) return;
+
+    this.#migrate();
 
     const world = this.#world();
 

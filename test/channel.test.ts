@@ -328,4 +328,55 @@ describe("Channel", () => {
     // The message the forgotten run drew stays where it is.
     expect(deletes()).toHaveLength(0);
   });
+
+  // An object deployed before runs had keys of their own still holds one `world`. Read as empty
+  // it would draw nothing, and `deliverAll` takes down every message the world no longer draws.
+  it("splits a world left behind by the previous shape, rather than losing it", async () => {
+    const object = stub();
+    const at = secondsAgo(30);
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      const { kv } = state.storage;
+
+      kv.put("world", {
+        runs: new Map([
+          ["900", { id: "900", at, seen: at, jobs: [], deployments: [], repository }],
+        ]),
+        notes: [
+          {
+            key: `push.:${at}`,
+            at,
+            seen: at,
+            kind: "push",
+            repository,
+            sha: "abc1234",
+            content: {
+              username: "octohook",
+              components: [{ type: 10, content: "pushed abc1234" }],
+            },
+          },
+        ],
+      });
+
+      kv.put("meta", { secret, hook: "organization", repository });
+      kv.put("flushAt", Date.now());
+
+      await state.storage.setAlarm(Date.now() + 1000);
+    });
+
+    expect(await runDurableObjectAlarm(object)).toBe(true);
+
+    // Both survive the split: the note draws, and the run draws on its own because nothing
+    // resolved a trigger for it. Neither is taken down.
+    expect(deletes()).toHaveLength(0);
+    expect(posts()).toHaveLength(2);
+    expect(posts().map(lines).join("\n")).toContain("pushed abc1234");
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      const keys = [...state.storage.kv.list({})].map(([key]) => key);
+
+      expect(keys).toContain("run:900");
+      expect(keys).not.toContain("world");
+    });
+  });
 });
