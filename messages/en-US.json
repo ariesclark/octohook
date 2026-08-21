@@ -48,5 +48,18 @@
   "delete.branch": "deleted branch {$ref}",
   "delete.tag": "deleted tag {$ref}",
   "star.added": "starred {$repository}",
-  "star.removed": "unstarred {$repository}"
+  "star.removed": "unstarred {$repository}",
+  "issue.opened": "opened issue {$issue}: {$title}",
+  "issue.closed": "closed issue {$issue}: {$title}",
+  "issue.not_planned": "closed issue {$issue} as not planned: {$title}",
+  "issue.reopened": "reopened issue {$issue}: {$title}",
+  "issue.labels": "labels: {$labels}",
+  "vulnerability.headline": "{$action} {$severity} vulnerability in {$repository}",
+  "vulnerability.fixed": "fixed in {$version}",
+  "issue.other": "{$action} issue {$issue}: {$title}",
+  "check.headline": "{$check} {$verdict} on {$where}",
+  "check.took": "in {$duration}",
+  "run.headline": "{$run} {$verdict} on {$ref}",
+  "deploy.headline": "{$what} to {$where}",
+  "run.settled": "{$run} {$verdict}"
 }

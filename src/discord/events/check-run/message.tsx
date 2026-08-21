@@ -1,6 +1,7 @@
 import { WebhookContent } from "../../types";
 import { Ref } from "../../components/ref";
 import { checkMark, lead } from "../../marks";
+import { t } from "../../messages.ts";
 import { HookScope, preferredRef } from "../../refs";
 import { appAvatarUrl, CheckRunEvent, checkDuration, conclusionLabel } from "./shared";
 
@@ -28,20 +29,17 @@ export function CheckRunMessage({
       <text>
         <b>
           {lead(checkMark(conclusion))}
-          <a href={html_url}>{name}</a> {conclusionLabel(conclusion)}
-          {branch ? (
-            <>
-              {" on "}
+          {t("check.headline", {
+            check: <a href={html_url}>{name}</a>,
+            verdict: conclusionLabel(conclusion),
+            where: branch ? (
               <Ref repository={repository} refName={branch} hook={hook} />
-            </>
-          ) : (
-            <>
-              {" on "}
+            ) : (
               <a href={repository.html_url}>{repository.name}</a>
-            </>
-          )}
+            ),
+          })}
         </b>
-        {duration ? ` in ${duration}` : ""}
+        {duration ? ` ${t("check.took", { duration })}` : ""}
       </text>
     </message>
   );

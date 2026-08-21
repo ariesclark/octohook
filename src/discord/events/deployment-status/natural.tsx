@@ -4,6 +4,7 @@ import { preferredRef } from "../../refs";
 import { WebhookContent } from "../../types";
 import { deploymentVerb, namesRef } from "./labels";
 import { DeploymentVariantProps } from "./shared";
+import { t } from "../../messages.ts";
 
 // GitHub Actions app id, matching how workflow runs identify themselves.
 const actionsAvatarUrl = "https://avatars.githubusercontent.com/in/15368";
@@ -23,18 +24,19 @@ export function DeploymentNatural({ event, hook }: DeploymentVariantProps): Webh
           {lead(deploymentMark(state))}
           {deploymentVerb(state)}{" "}
           {namesRef(state) ? (
-            <>
-              {ref ? (
+            t("deploy.headline", {
+              what: ref ? (
                 <Ref repository={repository} refName={ref} hook={hook} />
               ) : (
                 <a href={repository.html_url}>{repository.name}</a>
-              )}
-              {" to "}
-            </>
+              ),
+              where: url ? <a href={url}>{environment}</a> : environment,
+            })
+          ) : url ? (
+            <a href={url}>{environment}</a>
           ) : (
-            ""
+            environment
           )}
-          {url ? <a href={url}>{environment}</a> : environment}
         </b>
       </text>
     </message>

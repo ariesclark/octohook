@@ -1,5 +1,6 @@
 import { Ref } from "../../components/ref";
 import { lead } from "../../marks";
+import { t } from "../../messages.ts";
 import { HookScope, preferredRef } from "../../refs";
 import { WebhookContent } from "../../types";
 import {
@@ -36,21 +37,18 @@ export function WorkflowRunNatural({
       <text>
         <b>
           {lead(runConclusionMark(conclusion))}
-          <a href={html_url}>
-            {workflowName(name ?? "")}
-            {run_number ? ` #${run_number}` : ""}
-          </a>{" "}
-          {runConclusionLabel(conclusion)}
-          {ref ? (
-            <>
-              {" on "}
-              <Ref repository={repository} refName={ref} hook={hook} />
-            </>
-          ) : (
-            ""
-          )}
+          {t(ref ? "run.headline" : "run.settled", {
+            run: (
+              <a href={html_url}>
+                {workflowName(name ?? "")}
+                {run_number ? ` #${run_number}` : ""}
+              </a>
+            ),
+            verdict: runConclusionLabel(conclusion),
+            ref: ref ? <Ref repository={repository} refName={ref} hook={hook} /> : "",
+          })}
         </b>
-        {duration ? ` in ${duration}` : ""}
+        {duration ? ` ${t("check.took", { duration })}` : ""}
       </text>
     </message>
   );
