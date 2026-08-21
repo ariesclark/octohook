@@ -6,7 +6,9 @@ import {
 } from "./discord/events/check-run/board";
 import { workflowName } from "./discord/events/workflow-run/shared";
 import type { HookScope } from "./discord/refs";
-import { ownerOf, type Run, type World } from "./state.ts";
+import { isFoldable } from "./foldable.ts";
+import { mergeAdjacent } from "./merge.ts";
+import { ownerOf, type Repository, type Run, type World } from "./state.ts";
 
 /**
  * The whole channel, drawn from the world every time. Nothing here knows which event just
@@ -19,9 +21,12 @@ export type Composed = {
   key: string;
   at: string;
   content: unknown;
+  /** Whether this can join the message before it, which only a finished thing can. */
+  merges?: boolean;
 };
 
-type Repository = { name: string; full_name?: string; html_url: string };
+/** How far apart two things may be said and still read as one message. */
+const mergeWindow = 60_000;
 
 /** A run with no workflow behind it sorts under what it calls itself, and last of all. */
 function named(run: Run): string {
@@ -40,6 +45,11 @@ function toBoard(run: Run): Board & { runId: string } {
   };
 }
 
+/**
+ * An organisation hook feeds one channel from every repository it covers, and every link a board
+ * draws is built from a repository url — so each entry answers for itself, and the caller's
+ * repository is only what an entry that never learned one falls back to.
+ */
 export function compose(world: World, repository: Repository, hook?: HookScope): Composed[] {
   const composed: Composed[] = [];
 
@@ -64,13 +74,20 @@ export function compose(world: World, repository: Repository, hook?: HookScope):
       .sort((left, right) => named(left).localeCompare(named(right)));
 
     if (runs.length === 0) {
-      composed.push({ key: note.key, at: note.at, content: note.content });
+      composed.push({
+        key: note.key,
+        at: note.at,
+        content: note.content,
+        // A push has runs coming even when none has arrived; a star never will.
+        merges: !isFoldable(note.kind),
+      });
+
       continue;
     }
 
     const board = CommitBoard({
       entries: runs.map(toBoard) as CommitBoardEntry[],
-      repository,
+      repository: note.repository ?? runs[0]?.repository ?? repository,
     }) as { components?: unknown[] };
 
     const content = note.content as { components?: unknown[] };
@@ -93,11 +110,14 @@ export function compose(world: World, repository: Repository, hook?: HookScope):
     composed.push({
       key: `run:${run.id}`,
       at: run.at,
-      content: RunBoard({ board: toBoard(run), repository, hook }),
+      content: RunBoard({ board: toBoard(run), repository: run.repository ?? repository, hook }),
     });
   }
 
-  return composed.sort(
-    (left, right) => left.at.localeCompare(right.at) || left.key.localeCompare(right.key),
+  return mergeAdjacent(
+    composed.sort(
+      (left, right) => left.at.localeCompare(right.at) || left.key.localeCompare(right.key),
+    ),
+    mergeWindow,
   );
 }

@@ -10,6 +10,6 @@
     "lib": ["ESNext"],
     "jsx": "react-jsx",
     "jsxImportSource": "@ariesclark/discord-jsx",
-    "types": ["./worker-configuration.d.ts", "node"]
+    "types": ["./worker-configuration.d.ts", "node", "@cloudflare/vitest-plugin/types"]
   }
 }

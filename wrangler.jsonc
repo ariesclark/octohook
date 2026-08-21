@@ -16,17 +16,18 @@
 			"custom_domain": true
 		}
 	],
-	"queues": {
-		"consumers": [
+	"durable_objects": {
+		"bindings": [
 			{
-				"queue": "octohook-webhooks"
-			}
-		],
-		"producers": [
-			{
-				"binding": "WEBHOOK_QUEUE",
-				"queue": "octohook-webhooks"
+				"name": "CHANNEL",
+				"class_name": "Channel"
 			}
 		]
+	},
+	"exports": {
+		"Channel": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		}
 	}
 }

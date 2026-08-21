@@ -1,7 +1,5 @@
 import app from "./app";
-import { queue, SerializedRequest } from "./queue";
 
-export default {
-  ...app,
-  queue,
-} satisfies ExportedHandler<CloudflareBindings, SerializedRequest>;
+export { Channel } from "./channel.ts";
+
+export default app satisfies ExportedHandler<CloudflareBindings>;
