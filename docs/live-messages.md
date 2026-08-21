@@ -15,7 +15,7 @@ through `src/live.ts`, which holds the world in memory and draws on every delive
 storage, its debounce and its alarm have only ever run under vitest. Deploying is the next thing,
 and §1 says what that needs.
 
-**Nothing is half-finished.** 268 tests pass under `node --test` and 10 under vitest, `tsc` and
+**Nothing is half-finished.** 262 tests pass under `node --test` and 10 under vitest, `tsc` and
 lint are clean, and the worker builds. Start from the question above, not from archaeology.
 
 **Decisions taken during the port**, all of them Aries's:
@@ -26,8 +26,9 @@ lint are clean, and the worker builds. Start from the question above, not from a
 - Everything goes through the channel, including events that never gather into a board, so one
   webhook has one sender.
 - SQLite storage, and `@cloudflare/vitest-plugin` for the tests.
-- The GitHub token comes off the hook's url, not a worker secret, and one carrying more than the
-  two lookups need is refused with a 400. See §9.
+- The GitHub token comes off the hook's url, not a worker secret, and is taken as given. A check
+  that refused a token broader than the lookups need was built and then dropped — she asked for
+  it, saw it, and said allow any. Do not put it back. See §9.
 
 **How the loop works here.** Change the code, replay real deliveries to the Spidey Bot channel,
 Aries looks and replies with a short correction. She is terse and action-oriented; a correction of
@@ -103,6 +104,7 @@ The worker builds at **816 KiB gzipped** (was 808 before the port, 741 before `m
 
 1. Put a GitHub token on each hook's url — `?token=…`. Without one every board draws with no run
    names, numbers, triggers or annotations. There is no `GITHUB_TOKEN` secret any more; see §9.
+   `gh auth token` works, and carries far more than the lookups use.
 2. The `octohook-webhooks` queue is no longer consumed by anything. Deleting it will discard
    whatever is still in flight — a few stars and issue messages at worst.
 
@@ -415,27 +417,13 @@ worker no longer holds one credential for everybody, so two hooks pointing here 
 different organisations — and the token never reaches storage, because every lookup happens in
 `deliver` and the alarm that draws needs no credentials at all.
 
+Any token is accepted as it is given. What the two lookups actually need is `repo` on a private
+repository, `public_repo` or no scope at all on a public one; a fine-grained token wants Actions
+read and Checks read and nothing else. Nothing enforces that.
+
 The url is now a place a GitHub token lives. The Discord webhook secret was already in the path,
 so the url was always a credential, but a PAT is a broader one — and `observability.traces` is on,
 so request urls reach Cloudflare's dashboard.
-
-**A token carrying more than the two lookups need is refused with a 400**, naming the scopes to
-take off. That answer lands as a red delivery on the hook's own page in GitHub, which is the only
-place anybody would see it — hence the check at the edge rather than inside the object.
-
-What is needed and nothing else: `repo` on a private repository, `public_repo` or no scope at all
-on a public one. A fine-grained token is the better answer and needs neither — Actions read and
-Checks read — and reports no scopes header, so it passes untouched.
-
-`src/token.ts` asks `/rate_limit`, which answers for any token and is the one endpoint exempt from
-the limit it reports. One verdict per token for the life of the isolate. A token GitHub will not
-answer for passes and is asked about again next time: refusing every delivery because GitHub is
-having a bad minute trades a real outage for a question about how broad the operator's own
-credential is.
-
-Worth knowing: `gh auth token` carries `admin:org_hook, gist, read:org, repo, workflow` and is
-therefore refused. Replays through `src/live.ts` do not go near this check, so it still works
-there.
 
 ---
 

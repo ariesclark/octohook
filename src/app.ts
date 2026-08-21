@@ -7,7 +7,6 @@ import { foldablePayload, shaOf, type Folded } from "./foldable.ts";
 import { occurredAt } from "./occurred";
 import { optionsMiddleware } from "./options";
 import { localReferenceFor } from "./resolve.ts";
-import { excessScopes, neededScopes } from "./token.ts";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -42,21 +41,6 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
   const event = get("event");
   const hook = get("hook");
 
-  // Refused here rather than further in, because this is the only answer GitHub shows anybody:
-  // a red delivery on the hook's own page, saying which scopes to take off.
-  const token = req.query("token");
-  const excess = token ? await excessScopes(token) : [];
-
-  if (excess.length > 0)
-    return json(
-      {
-        message: "Token carries more than octohook asks of it.",
-        remove: excess,
-        keep: neededScopes,
-      },
-      { status: 400 },
-    );
-
   const [name = ""] = event.type.split(".");
   const payload = event as unknown as Record<string, unknown>;
   const at = occurredAt(event);
@@ -82,7 +66,7 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
     fold(secret.split("/")[0]!, {
       secret,
       hook,
-      token,
+      token: req.query("token"),
       deliveries: [delivery],
     }),
   );
