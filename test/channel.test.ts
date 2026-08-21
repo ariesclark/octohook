@@ -82,11 +82,12 @@ const deliver = (object: ReturnType<typeof stub>, deliveries: Folded[], to = sec
  */
 const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
 
-function push(at: string, sha: string): Folded {
+function push(at: string, sha: string, received = at): Folded {
   return {
     event: "push",
     action: null,
     delivered_at: at,
+    received_at: received,
     payload: { repository, after: sha },
     content: { username: "octohook", components: [{ type: 10, content: `pushed ${sha}` }] },
   };
@@ -97,6 +98,7 @@ function job(at: string, sha: string, name: string, conclusion: string | null): 
     event: "check_run",
     action: conclusion ? "completed" : "created",
     delivered_at: at,
+    received_at: at,
     payload: {
       repository,
       check_run: {
@@ -262,9 +264,8 @@ describe("Channel", () => {
   it("stops redrawing a commit it has forgotten without taking it down", async () => {
     const object = stub();
 
-    await deliver(object, [
-      push(new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), "abc1234"),
-    ]);
+    const longAgo = new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString();
+    await deliver(object, [push(longAgo, "abc1234", longAgo)]);
     await runDurableObjectAlarm(object);
 
     await deliver(object, [push(secondsAgo(1), "def5678")]);

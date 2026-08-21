@@ -37,8 +37,12 @@ const debounce = 2_000;
 /** However long the burst keeps coming, the channel is never left stale for longer than this. */
 const maximumWait = 15_000;
 
-/** A commit that has said nothing for this long is not news any more, and is let go of. */
-const retention = 6 * 60 * 60 * 1000;
+/**
+ * A commit nothing has reported on for this long is not news any more. Measured from when a
+ * delivery arrived, so redelivering a two-day-old event by hand still draws it — and long enough
+ * that a hand redelivery is a realistic way to recover one that went missing.
+ */
+const retention = 48 * 60 * 60 * 1000;
 
 export type Batch = {
   secret: string;

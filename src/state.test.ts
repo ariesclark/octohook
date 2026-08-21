@@ -286,6 +286,35 @@ describe("forget", () => {
     assert.equal(built.notes.length, 1);
   });
 
+  // GitHub redelivers by hand from the hook page, hours or days after the fact. Measured against
+  // when the thing happened, such a delivery is folded and forgotten in the same breath.
+  test("keeps what happened long ago but only arrived now", () => {
+    const built = emptyWorld();
+    const arrived = at("09");
+
+    apply(
+      built,
+      { ...delivery("push", null, { after: "old" }, at("01")), received_at: arrived },
+      {
+        content: { components: [] },
+      },
+    );
+    apply(
+      built,
+      {
+        ...delivery("check_run", "completed", checkRun("build", "success"), at("01")),
+        received_at: arrived,
+      },
+      {
+        runId: "old-run",
+      },
+    );
+
+    assert.deepEqual(forget(built, at("05")), []);
+    assert.equal(built.runs.has("old-run"), true);
+    assert.equal(built.notes.length, 1);
+  });
+
   test("drops nothing when everything is newer than the cutoff", () => {
     const built = world();
     assert.deepEqual(forget(built, at("00")), []);
@@ -297,6 +326,7 @@ describe("forget", () => {
 describe("ownerOf", () => {
   const note = (key: string, kind: string, sha?: string): Note => ({
     key,
+    seen: key,
     kind,
     sha,
     at: key,

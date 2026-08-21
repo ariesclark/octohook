@@ -34,7 +34,7 @@ export type Repository = { name: string; full_name?: string; html_url: string };
 export type Run = {
   id: string;
   at: string;
-  /** When this last reported, which is what decides whether it is still news. */
+  /** When this last reached us, which is what decides whether it is still news. */
   seen: string;
   repository?: Repository;
   sha?: string;
@@ -52,6 +52,8 @@ export type Run = {
 export type Note = {
   key: string;
   at: string;
+  /** When this reached us, which is not when it happened. */
+  seen: string;
   /** The event that made it, since which note a run belongs under depends on what it is. */
   kind: string;
   repository?: Repository;
@@ -88,7 +90,14 @@ export function emptyWorld(): World {
 export type Delivery = {
   event: string;
   action: string | null;
+  /** When the thing happened, which is what orders the channel and names a note. */
   delivered_at: string;
+  /**
+   * When it reached us, which is what decides whether it is still worth holding. GitHub
+   * redelivers by hand from the hook page, hours or days after the fact, and a delivery measured
+   * against its own age would be folded and forgotten in the same breath.
+   */
+  received_at?: string;
   payload: Record<string, unknown>;
 };
 
@@ -101,16 +110,16 @@ export type Resolved = {
   content?: unknown;
 };
 
-function run(world: World, id: string, at: string): Run {
+function run(world: World, id: string, at: string, seen: string): Run {
   const existing = world.runs.get(id);
   if (existing) {
-    // Order in the channel is fixed when a run first appears; how recently it spoke is what
+    // Order in the channel is fixed when a run first appears; how recently it reached us is what
     // decides whether it is still worth drawing, and only the second of those moves.
-    if (at > existing.seen) existing.seen = at;
+    if (seen > existing.seen) existing.seen = seen;
     return existing;
   }
 
-  const created: Run = { id, at, seen: at, jobs: [], deployments: [] };
+  const created: Run = { id, at, seen, jobs: [], deployments: [] };
   world.runs.set(id, created);
 
   return created;
@@ -145,7 +154,7 @@ export function forget(world: World, before: string): string[] {
   const kept = [...world.runs.values()];
 
   world.notes = world.notes.filter((note) => {
-    if (note.at >= before) return true;
+    if (note.seen >= before) return true;
     if (kept.some((entry) => ownerOf([note], entry)?.key === note.key)) return true;
 
     dropped.push(note.key);
@@ -163,6 +172,7 @@ export function forget(world: World, before: string): string[] {
 export function apply(world: World, delivery: Delivery, resolved: Resolved = {}): string {
   const { payload, event, action } = delivery;
   const at = delivery.delivered_at;
+  const seen = delivery.received_at ?? at;
 
   if (event === "check_run") {
     if (!resolved.runId) return "";
@@ -179,7 +189,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       output?: { title?: string | null; summary?: string | null };
     };
 
-    const entry = run(world, resolved.runId, at);
+    const entry = run(world, resolved.runId, at, seen);
     entry.run ??= resolved.run;
     entry.repository ??= repositoryIn(payload);
     entry.sha ??= check.head_sha;
@@ -222,7 +232,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       head_branch?: string;
     };
 
-    const entry = run(world, resolved.runId, at);
+    const entry = run(world, resolved.runId, at, seen);
     entry.run ??= resolved.run;
     entry.repository ??= repositoryIn(payload);
     entry.sha ??= suite.head_sha;
@@ -251,7 +261,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
         }
       | undefined;
 
-    const entry = run(world, resolved.runId, at);
+    const entry = run(world, resolved.runId, at, seen);
     entry.run ??= resolved.run;
     entry.repository ??= repositoryIn(payload);
     entry.sha ??= deployment.sha;
@@ -296,6 +306,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     const note: Note = {
       key,
       at,
+      seen,
       kind: event,
       repository: repositoryIn(payload),
       sha,

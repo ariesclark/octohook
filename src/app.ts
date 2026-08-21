@@ -59,6 +59,7 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
     event: name,
     action: "action" in event ? String(event.action) : null,
     delivered_at: new Date(at ?? Date.now()).toISOString(),
+    received_at: new Date().toISOString(),
     payload: foldablePayload(name, payload),
   };
 
