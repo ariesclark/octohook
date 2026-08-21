@@ -10,7 +10,7 @@ Written 2026-08-21, as a handoff.
 ## 0. Start here
 
 **The immediate question, unanswered.** Aries said "let's do the durable object" and asked for the
-research first (§8). Two decisions are waiting on him and should not be assumed:
+research first (§8). Two decisions are waiting on her and should not be assumed:
 
 1. SQLite storage backend — it is the only live option, but it cannot be undone once deployed.
 2. Whether Durable Object tests justify `@cloudflare/vitest-plugin` pulling a second wrangler and
@@ -24,25 +24,25 @@ last replay went to the test channel successfully. Start from the question above
 archaeology.
 
 **How the loop works here.** Change the code, replay real deliveries to the Spidey Bot channel,
-Aries looks and replies with a short correction. He is terse and action-oriented; a correction of
+Aries looks and replies with a short correction. She is terse and action-oriented; a correction of
 three words usually means one specific thing, so read it narrowly and ask rather than redesign.
-When he says "send it" he means to Discord, and "replay it" has meant the file when he was watching
+When she says "send it" she means to Discord, and "replay it" has meant the file when she was watching
 `replay.md` and Discord otherwise — ask if it is ambiguous rather than guessing, because a wrong
-guess spends twenty messages of his channel.
+guess spends twenty messages of her channel.
 
-**Decisions he made explicitly. Do not relitigate these** — most were chosen after seeing thirteen
+**Decisions she made explicitly. Do not relitigate these** — most were chosen after seeing thirteen
 alternatives side by side:
 
-- One reading of a run: only what failed or said something. (He compared `ledger`, `chips`,
+- One reading of a run: only what failed or said something. (She compared `ledger`, `chips`,
   `verdict` and picked `verdict`.)
 - One layout: everything a run contains steps into a quote, the run's name stays at the margin.
-  (He compared thirteen and picked `aside`. The others are deleted.)
+  (She compared thirteen and picked `aside`. The others are deleted.)
 - The run header is small text; the push headline is the only bold thing in the message.
-- Annotations are list items with no per-annotation icon. He asked for the opposite earlier in a
+- Annotations are list items with no per-annotation icon. She asked for the opposite earlier in a
   different context — the current instruction stands.
 - No feature flags. Every `setX`/`showX` toggle was scaffolding for those comparisons and is gone.
   Do not add one to make a new thing switchable; commit to the behaviour.
-- No comment on an absence. He added this to his CLAUDE.md; a removed thing needs no note saying so.
+- No comment on an absence. She added this to her CLAUDE.md; a removed thing needs no note saying so.
 - `t()` not `say()`, and every phrase lives in `messages/en-US.json`.
 
 **Traps in this environment.** `bun` needs `dangerouslyDisableSandbox: true` on the Bash call.
@@ -60,12 +60,12 @@ so read vendored source under `node_modules/` or clone with
   landed in one. They are now much smaller; keep them that way or merge them.
 - **Learning the same rule four times.** Four kinds of row each separately learned not to open with
   a line break. It is one `Break` component now — put new rows through it.
-- **Asserting instead of checking.** I twice told him something was fixed when it was not, and
-  twice explained behaviour I had not verified. He checks, and he is right more often than not.
+- **Asserting instead of checking.** I twice told her something was fixed when it was not, and
+  twice explained behaviour I had not verified. She checks, and she is right more often than not.
 
 **Two other things.** There is a peer Claude session named `flirtual` working on the other repo —
 `SendMessage` reaches it, and it has corrected me twice on facts about their workflows. And the
-GitHub PAT he pasted into the conversation to read org hook deliveries is still live and should be
+GitHub PAT she pasted into the conversation to read org hook deliveries is still live and should be
 revoked; its value is deliberately not recorded here.
 
 ---
