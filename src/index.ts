@@ -1,7 +1,7 @@
 import app from "./app";
-import { queue, WebhookQueueMessage } from "./queue";
+import { queue, SerializedRequest } from "./queue";
 
 export default {
   ...app,
   queue,
-} satisfies ExportedHandler<CloudflareBindings, WebhookQueueMessage>;
+} satisfies ExportedHandler<CloudflareBindings, SerializedRequest>;
