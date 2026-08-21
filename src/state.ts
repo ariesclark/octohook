@@ -28,9 +28,15 @@ export type Deployment = {
   jobUrl?: string;
 };
 
+/** Enough of a repository to draw a board's links from. One channel can be fed by many. */
+export type Repository = { name: string; full_name?: string; html_url: string };
+
 export type Run = {
   id: string;
   at: string;
+  /** When this last reported, which is what decides whether it is still news. */
+  seen: string;
+  repository?: Repository;
   sha?: string;
   branch?: string;
   /** Absent until the API says which workflow this is; a check suite may never have one. */
@@ -48,6 +54,7 @@ export type Note = {
   at: string;
   /** The event that made it, since which note a run belongs under depends on what it is. */
   kind: string;
+  repository?: Repository;
   sha?: string;
   content: unknown;
 };
@@ -96,12 +103,56 @@ export type Resolved = {
 
 function run(world: World, id: string, at: string): Run {
   const existing = world.runs.get(id);
-  if (existing) return existing;
+  if (existing) {
+    // Order in the channel is fixed when a run first appears; how recently it spoke is what
+    // decides whether it is still worth drawing, and only the second of those moves.
+    if (at > existing.seen) existing.seen = at;
+    return existing;
+  }
 
-  const created: Run = { id, at, jobs: [], deployments: [] };
+  const created: Run = { id, at, seen: at, jobs: [], deployments: [] };
   world.runs.set(id, created);
 
   return created;
+}
+
+function repositoryIn(payload: Record<string, unknown>): Repository | undefined {
+  const repository = payload.repository as Repository | undefined;
+  if (!repository?.name || !repository.html_url) return undefined;
+
+  return { name: repository.name, full_name: repository.full_name, html_url: repository.html_url };
+}
+
+/**
+ * Everything the channel has stopped hearing about. A replay ends and takes its world with it; a
+ * channel does not, so a commit that stopped reporting has to be let go of or the world grows
+ * for as long as the worker runs.
+ *
+ * Returns the composed keys it dropped, because the message ids drawn under them have to be let
+ * go of in the same breath — a forgotten message must be left where it is in the channel, and
+ * anything still holding its id would read the absence as "no longer true" and take it down.
+ */
+export function forget(world: World, before: string): string[] {
+  const dropped: string[] = [];
+
+  for (const [id, entry] of world.runs) {
+    if (entry.seen >= before) continue;
+
+    world.runs.delete(id);
+    dropped.push(`run:${id}`);
+  }
+
+  const kept = [...world.runs.values()];
+
+  world.notes = world.notes.filter((note) => {
+    if (note.at >= before) return true;
+    if (kept.some((entry) => ownerOf([note], entry)?.key === note.key)) return true;
+
+    dropped.push(note.key);
+    return false;
+  });
+
+  return dropped;
 }
 
 /**
@@ -130,6 +181,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
 
     const entry = run(world, resolved.runId, at);
     entry.run ??= resolved.run;
+    entry.repository ??= repositoryIn(payload);
     entry.sha ??= check.head_sha;
     entry.branch ??= check.check_suite?.head_branch;
     entry.title ??= check.app?.name;
@@ -172,6 +224,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
 
     const entry = run(world, resolved.runId, at);
     entry.run ??= resolved.run;
+    entry.repository ??= repositoryIn(payload);
     entry.sha ??= suite.head_sha;
     entry.branch ??= suite.head_branch;
     entry.settled = suite.conclusion;
@@ -200,6 +253,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
 
     const entry = run(world, resolved.runId, at);
     entry.run ??= resolved.run;
+    entry.repository ??= repositoryIn(payload);
     entry.sha ??= deployment.sha;
 
     const url = status?.environment_url || status?.target_url;
@@ -237,7 +291,24 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
           ? (payload.pull_request as unknown as { head?: { sha?: string } })?.head?.sha
           : undefined;
 
-    world.notes.push({ key, at, kind: event, sha, content: resolved.content });
+    const note: Note = {
+      key,
+      at,
+      kind: event,
+      repository: repositoryIn(payload),
+      sha,
+      content: resolved.content,
+    };
+
+    // GitHub redelivers, by hand from the hook page and by itself after a bad response. Kept
+    // twice, a note is two messages saying the same thing for as long as the channel holds it.
+    const index = world.notes.findIndex((existing) => existing.key === key);
+    if (index !== -1) {
+      world.notes[index] = note;
+      return "";
+    }
+
+    world.notes.push(note);
     return `noted ${event}${action ? `.${action}` : ""}`;
   }
 

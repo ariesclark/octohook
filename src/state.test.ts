@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { Delivery, Note } from "./state.ts";
-import { apply, emptyWorld, ownerOf } from "./state.ts";
+import { apply, emptyWorld, forget, ownerOf } from "./state.ts";
 
 function delivery(event: string, action: string | null, payload: object, at = "01:00"): Delivery {
   return { event, action, delivered_at: at, payload: payload as Record<string, never> };
@@ -132,6 +132,32 @@ describe("apply", () => {
     assert.equal(world.notes[0]!.sha, "abc1234");
   });
 
+  // GitHub redelivers, by hand from the hook page and by itself after a bad response. A second
+  // copy of a note is a second message saying the same thing, for as long as the channel holds it.
+  test("remembers a redelivered note once", () => {
+    const world = emptyWorld();
+    const again = () =>
+      apply(world, delivery("push", null, { after: "abc1234" }, "2026-08-21T01:00:00Z"), {
+        content: { components: [{ content: "pushed" }] },
+      });
+
+    assert.equal(again(), "noted push");
+    assert.equal(again(), "");
+    assert.equal(world.notes.length, 1);
+  });
+
+  test("takes the newer rendering of a note it already has", () => {
+    const world = emptyWorld();
+    const at = "2026-08-21T01:00:00Z";
+
+    apply(world, delivery("push", null, { after: "abc1234" }, at), { content: { components: [] } });
+    apply(world, delivery("push", null, { after: "abc1234" }, at), {
+      content: { components: [{ content: "now with a name" }] },
+    });
+
+    assert.deepEqual(world.notes[0]!.content, { components: [{ content: "now with a name" }] });
+  });
+
   test("changes nothing for an event with nowhere to go", () => {
     const world = emptyWorld();
     const changed = apply(world, delivery("check_run", "created", checkRun("build", null)), {});
@@ -139,6 +165,104 @@ describe("apply", () => {
     assert.equal(changed, "");
     assert.equal(world.runs.size, 0);
     assert.equal(world.notes.length, 0);
+  });
+});
+
+describe("apply, across repositories", () => {
+  const repository = {
+    name: "flirtual",
+    full_name: "flirtual/flirtual",
+    html_url: "https://g/f/f",
+  };
+
+  // One channel can be fed by an organisation hook, so the boards in it are not all from one
+  // repository — and every link a board draws is built from that repository's url.
+  test("remembers which repository a run is from", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "created", { ...checkRun("build", null), repository }), {
+      runId: "7",
+    });
+
+    assert.deepEqual(world.runs.get("7")!.repository, repository);
+  });
+
+  test("remembers which repository a note is from", () => {
+    const world = emptyWorld();
+    apply(world, delivery("push", null, { after: "abc1234", repository }), {
+      content: { components: [] },
+    });
+
+    assert.deepEqual(world.notes[0]!.repository, repository);
+  });
+});
+
+describe("forget", () => {
+  const at = (hour: string) => `2026-08-21T${hour}:00:00Z`;
+
+  function world() {
+    const built = emptyWorld();
+
+    apply(built, delivery("push", null, { after: "old" }, at("01")), {
+      content: { components: [] },
+    });
+    apply(built, delivery("push", null, { after: "new" }, at("09")), {
+      content: { components: [] },
+    });
+
+    apply(built, delivery("check_run", "completed", checkRun("build", "success"), at("01")), {
+      runId: "old-run",
+    });
+    apply(built, delivery("check_run", "completed", checkRun("build", "success"), at("09")), {
+      runId: "new-run",
+    });
+
+    return built;
+  }
+
+  test("drops what stopped reporting before the cutoff", () => {
+    const built = world();
+    const dropped = forget(built, at("05"));
+
+    assert.deepEqual(dropped.sort(), ["push.:2026-08-21T01:00:00Z", "run:old-run"]);
+    assert.equal(built.runs.has("old-run"), false);
+    assert.equal(built.runs.has("new-run"), true);
+    assert.deepEqual(
+      built.notes.map(({ sha }) => sha),
+      ["new"],
+    );
+  });
+
+  test("keeps a run that is still reporting, however old its first job", () => {
+    const built = world();
+    apply(built, delivery("check_run", "completed", checkRun("test", "success"), at("09")), {
+      runId: "old-run",
+    });
+
+    assert.deepEqual(forget(built, at("05")), ["push.:2026-08-21T01:00:00Z"]);
+    assert.equal(built.runs.has("old-run"), true);
+  });
+
+  // A note is what its runs are drawn under; forgetting it first would strand them.
+  test("keeps a note a surviving run still belongs to", () => {
+    const built = emptyWorld();
+
+    apply(built, delivery("push", null, { after: "abc1234" }, at("01")), {
+      content: { components: [] },
+    });
+    apply(built, delivery("check_run", "completed", checkRun("build", "success"), at("09")), {
+      runId: "7",
+      run: { name: "w", runNumber: 1, trigger: "push" },
+    });
+
+    assert.deepEqual(forget(built, at("05")), []);
+    assert.equal(built.notes.length, 1);
+  });
+
+  test("drops nothing when everything is newer than the cutoff", () => {
+    const built = world();
+    assert.deepEqual(forget(built, at("00")), []);
+    assert.equal(built.runs.size, 2);
+    assert.equal(built.notes.length, 2);
   });
 });
 
