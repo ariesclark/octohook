@@ -6,7 +6,6 @@ import {
   deploymentMark,
   issueMark,
   marks,
-  pullRequestMark,
   severityMark,
   workflowMark,
 } from "./marks.ts";
@@ -42,14 +41,17 @@ describe("checkMark", () => {
     assert.equal(checkMark("something-new"), marks.quiet);
   });
 
-  it("marks a check waiting on a person as active", () => {
-    assert.equal(checkMark("action_required"), marks.active);
+  // Orange is a warning now, and nothing in flight wears it: a check that stopped to ask a
+  // person is a warning, where a check that is simply still going is not.
+  it("marks a check waiting on a person as a warning", () => {
+    assert.equal(checkMark("action_required"), marks.warning);
+    assert.notEqual(checkMark("action_required"), marks.inflight);
   });
 });
 
 describe("workflowMark", () => {
   it("reads a run with no conclusion as still going", () => {
-    assert.equal(workflowMark(null), marks.active);
+    assert.equal(workflowMark(null), marks.inflight);
     assert.notEqual(workflowMark(null), checkMark(null));
   });
 
@@ -65,9 +67,9 @@ describe("deploymentMark", () => {
   });
 
   it("counts queued and pending as in flight", () => {
-    assert.equal(deploymentMark("queued"), marks.active);
-    assert.equal(deploymentMark("pending"), marks.active);
-    assert.equal(deploymentMark("in_progress"), marks.active);
+    assert.equal(deploymentMark("queued"), marks.inflight);
+    assert.equal(deploymentMark("pending"), marks.inflight);
+    assert.equal(deploymentMark("in_progress"), marks.inflight);
   });
 
   it("reads a torn-down deployment as dropped", () => {
@@ -80,33 +82,6 @@ describe("deploymentMark", () => {
   });
 });
 
-describe("pullRequestMark", () => {
-  it("reads a merge as good", () => {
-    assert.equal(pullRequestMark("merged"), marks.good);
-  });
-
-  it("reads a close without a merge as dropped rather than failed", () => {
-    assert.equal(pullRequestMark("closed"), marks.dropped);
-    assert.notEqual(pullRequestMark("closed"), marks.bad);
-  });
-
-  it("reads an open pull request as active", () => {
-    assert.equal(pullRequestMark("opened"), marks.active);
-    assert.equal(pullRequestMark("reopened"), marks.active);
-    assert.equal(pullRequestMark("marked ready for review"), marks.active);
-  });
-
-  it("reads a pull request that moved along as still active", () => {
-    assert.equal(pullRequestMark("updated"), marks.active);
-    assert.equal(pullRequestMark("renamed"), marks.active);
-    assert.equal(pullRequestMark("retargeted"), marks.active);
-  });
-
-  it("reads a draft as having no verdict yet", () => {
-    assert.equal(pullRequestMark("converted to draft"), marks.quiet);
-  });
-});
-
 describe("issueMark", () => {
   it("reads a resolved issue as good and an abandoned one as dropped", () => {
     assert.equal(issueMark("closed", "completed"), marks.good);
@@ -114,8 +89,8 @@ describe("issueMark", () => {
   });
 
   it("reads an open issue as active", () => {
-    assert.equal(issueMark("opened", null), marks.active);
-    assert.equal(issueMark("reopened", null), marks.active);
+    assert.equal(issueMark("opened", null), marks.inflight);
+    assert.equal(issueMark("reopened", null), marks.inflight);
   });
 });
 
@@ -128,7 +103,7 @@ describe("severityMark", () => {
   it("scales with how bad it is", () => {
     assert.equal(severityMark("critical"), marks.bad);
     assert.equal(severityMark("high"), marks.bad);
-    assert.equal(severityMark("moderate"), marks.active);
+    assert.equal(severityMark("moderate"), marks.warning);
     assert.equal(severityMark("low"), marks.quiet);
   });
 });
