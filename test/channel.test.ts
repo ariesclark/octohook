@@ -203,11 +203,11 @@ describe("Channel", () => {
     ]);
 
     await runInDurableObject(stub(), async (_instance: Channel, state) => {
-      const world = state.storage.kv.get<{ runs: Map<string, { jobs: Array<{ name: string }> }> }>(
-        "world",
-      )!;
+      const runs = [
+        ...state.storage.kv.list<{ jobs: Array<{ name: string }> }>({ prefix: "run:" }),
+      ];
+      const names = runs.flatMap(([, run]) => run.jobs.map(({ name }) => name));
 
-      const names = [...world.runs.values()].flatMap(({ jobs }) => jobs.map(({ name }) => name));
       expect(names.sort()).toEqual(["one", "two"]);
     });
   });
@@ -276,5 +276,56 @@ describe("Channel", () => {
     await runInDurableObject(object, async (_instance: Channel, state) => {
       expect([...state.storage.kv.list({ prefix: "sent:" })]).toHaveLength(1);
     });
+  });
+
+  // A run is its own key, so a delivery reads and rewrites the one it names rather than the
+  // whole channel — which is what keeps a long window from costing anything per delivery.
+  it("keeps every run under a key of its own", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    await deliver(object, [job(secondsAgo(29), "abc1234", "build", "success")]);
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      const keys = [...state.storage.kv.list({})].map(([key]) => key);
+
+      expect(keys).toContain("run:900");
+      expect(keys).toContain("notes");
+      expect(keys).not.toContain("world");
+    });
+  });
+
+  // Ageing the stored run rather than the delivery: the edge stamps arrival, so a delivery is
+  // never born outside the window — a run only leaves it by sitting there.
+  it("lets go of a forgotten run's key, not just its message", async () => {
+    const object = stub();
+
+    await deliver(object, [job(secondsAgo(30), "abc1234", "build", "success")]);
+    await runDurableObjectAlarm(object);
+
+    expect(posts()).toHaveLength(1);
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      const { kv } = state.storage;
+      const run = kv.get<{ seen: string }>("run:900")!;
+
+      kv.put("run:900", {
+        ...run,
+        seen: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+      });
+    });
+
+    await deliver(object, [push(secondsAgo(1), "def5678")]);
+    await runDurableObjectAlarm(object);
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      const keys = [...state.storage.kv.list({})].map(([key]) => key);
+
+      expect(keys.filter((key) => key.startsWith("run:"))).toEqual([]);
+      expect(keys.filter((key) => key.startsWith("sent:"))).toHaveLength(1);
+    });
+
+    // The message the forgotten run drew stays where it is.
+    expect(deletes()).toHaveLength(0);
   });
 });

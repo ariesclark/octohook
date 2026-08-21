@@ -6,7 +6,7 @@ import { deliverAll, discordTransport, type Held } from "./deliver.ts";
 import type { Folded } from "./foldable.ts";
 import type { HookScope } from "./discord/refs";
 import { resolveFor } from "./resolve.ts";
-import { apply, emptyWorld, forget, type Repository, type World } from "./state.ts";
+import { apply, forget, type Note, type Repository, type Run, type World } from "./state.ts";
 
 /**
  * One Discord channel, and everything it is currently saying. Deliveries fold into a world here;
@@ -94,24 +94,30 @@ export class Channel extends DurableObject<CloudflareBindings> {
     const { kv } = this.ctx.storage;
     const now = Date.now();
 
-    const world = (kv.get<World>("world") ?? emptyWorld()) as World;
-    const repository = kv.get<Meta>("meta")?.repository;
+    // Only the runs this batch names. A run is its own key, so a delivery reads and rewrites the
+    // one it is about rather than the whole channel — which is what lets the world be held for
+    // days without every delivery paying for the length of it.
+    const world: World = { runs: new Map(), notes: kv.get<Note[]>("notes") ?? [] };
 
-    let last = repository;
+    for (const [, values] of resolved) {
+      if (!values.runId) continue;
+
+      const held = kv.get<Run>(`run:${values.runId}`);
+      if (held) world.runs.set(values.runId, held);
+    }
+
+    let last = kv.get<Meta>("meta")?.repository;
     for (const [delivery, values] of resolved) {
       apply(world, delivery, values);
       last = (delivery.payload.repository as Repository | undefined) ?? last;
     }
 
-    // Forgotten in the same breath as their ids: a message the world no longer holds must be left
-    // where it is, and anything still holding its id would read the absence as "no longer true".
-    for (const key of forget(world, new Date(now - retention).toISOString()))
-      kv.delete(`sent:${key}`);
-
     const pendingSince = kv.get<number>("pendingSince") ?? now;
     const flushAt = Math.min(now + debounce, pendingSince + maximumWait);
 
-    kv.put("world", world);
+    for (const [id, entry] of world.runs) kv.put(`run:${id}`, entry);
+
+    kv.put("notes", world.notes);
     kv.put("revision", (kv.get<number>("revision") ?? 0) + 1);
     kv.put("pendingSince", pendingSince);
     kv.put("flushAt", flushAt);
@@ -124,6 +130,16 @@ export class Channel extends DurableObject<CloudflareBindings> {
     return flushAt;
   }
 
+  /** Every run and every note, which only the drawing and the forgetting ever need together. */
+  #world(): World {
+    const { kv } = this.ctx.storage;
+    const runs = new Map<string, Run>();
+
+    for (const [key, entry] of kv.list<Run>({ prefix: "run:" })) runs.set(key.slice(4), entry);
+
+    return { runs, notes: kv.get<Note[]>("notes") ?? [] };
+  }
+
   async alarm(): Promise<void> {
     const { kv } = this.ctx.storage;
 
@@ -131,9 +147,24 @@ export class Channel extends DurableObject<CloudflareBindings> {
     // one that has already happened.
     if (kv.get<number>("flushAt") === undefined) return;
 
+    const world = this.#world();
+
+    // Forgetting belongs here rather than in the fold: it is the one thing that has to see the
+    // whole world, and the draw is already holding all of it.
+    //
+    // A message the world lets go of is left where it is in the channel, so its id goes with it —
+    // anything still holding one would read the absence as "no longer true" and take it down. A
+    // dropped run's composed key is also its storage key; a note's never begins `run:`.
+    for (const key of forget(world, new Date(Date.now() - retention).toISOString())) {
+      kv.delete(`sent:${key}`);
+      if (key.startsWith("run:")) kv.delete(key);
+    }
+
+    kv.put("notes", world.notes);
+
     // Drawing sooner than the debounce asked for is not wrong, only less patient — the world is
     // drawn as it stands, and anything that arrives after moves the revision and asks again.
-    const drawn = await this.#draw();
+    const drawn = await this.#draw(world);
 
     // A delivery can arrive while the channel is being written, and it will have bumped the
     // revision and scheduled itself. Clearing the flush here would drop it.
@@ -147,12 +178,11 @@ export class Channel extends DurableObject<CloudflareBindings> {
   }
 
   /** The world, brought to Discord. Returns the revision it drew, which may already be behind. */
-  async #draw(): Promise<number | undefined> {
+  async #draw(world: World): Promise<number | undefined> {
     const { kv } = this.ctx.storage;
 
     const meta = kv.get<Meta>("meta");
-    const world = kv.get<World>("world") as World | undefined;
-    if (!meta || !world) return kv.get<number>("revision");
+    if (!meta) return kv.get<number>("revision");
 
     const revision = kv.get<number>("revision");
 
