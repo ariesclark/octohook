@@ -1,6 +1,6 @@
 import { WebhookContent } from "./types";
 
-export function getWebhookUrl(secret: string, type?: string): string {
+function getWebhookUrl(secret: string, type?: string): string {
   return `https://discord.com/api/webhooks/${secret}${type ? `/${type}` : ""}`;
 }
 

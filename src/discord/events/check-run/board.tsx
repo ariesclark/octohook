@@ -28,7 +28,7 @@ export type Board = {
 };
 
 /** Only a real workflow run has a page; a set of checks gathered under a suite does not. */
-export function runUrl(repositoryUrl: string, runId?: string): string | undefined {
+function runUrl(repositoryUrl: string, runId?: string): string | undefined {
   if (!runId || runId.startsWith("suite-")) return undefined;
 
   return `${repositoryUrl}/actions/runs/${runId}`;
@@ -40,7 +40,7 @@ export function runUrl(repositoryUrl: string, runId?: string): string | undefine
  * deployed is judged on the deployment, since `every` over no jobs is vacuously true and would
  * read as though the whole thing had been skipped.
  */
-export function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
+function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
   if (
     jobs.some(({ conclusion }) => conclusion === "failure" || conclusion === "timed_out") ||
     deployments.some(({ state }) => state === "failure" || state === "error")

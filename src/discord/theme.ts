@@ -7,15 +7,3 @@ export const defaultWebhookContent: RESTPostAPIWebhookWithTokenJSONBody = {
   username: "GitHub",
   avatar_url: githubAvatarUrl,
 };
-
-export const colors = {
-  neutral: 0x7289da,
-  error: 0xfc2929,
-  success: 0x009800,
-};
-
-export const stateColors: Partial<Record<string, number>> = {
-  error: colors.error,
-  failure: colors.error,
-  success: colors.success,
-};

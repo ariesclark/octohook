@@ -472,18 +472,11 @@ function cellContent(cell: { children: PhrasingContent[] } | undefined): Phrasin
 }
 
 /** Both ways of losing a table, so a message can pick one. */
-export const tableFormats = { flat: flattenTables, list: listTables } satisfies Record<
-  string,
-  Transform
->;
+const tableFormats = { flat: flattenTables, list: listTables } satisfies Record<string, Transform>;
 
 export type TableFormat = keyof typeof tableFormats;
 
-export let tableFormat: TableFormat = "list";
-
-export function setTableFormat(format: TableFormat) {
-  tableFormat = format;
-}
+let tableFormat: TableFormat = "list";
 
 /** Defers to {@link tableFormat}, so the choice travels with the message rather than the caller. */
 export function formatTables(tree: Nodes): void {

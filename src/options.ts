@@ -33,7 +33,7 @@ export function getQuery({ include, exclude }: Options) {
   };
 }
 
-export function formatHighlight(query?: string, data?: Record<string, unknown>) {
+function formatHighlight(query?: string, data?: Record<string, unknown>) {
   if (!query || !data) return undefined;
 
   const highlights = highlight(parse(query), data);
@@ -42,7 +42,7 @@ export function formatHighlight(query?: string, data?: Record<string, unknown>) 
   return Object.fromEntries(highlights.map(({ path, query }) => [path, String(query)]));
 }
 
-export function getMatches({ include, exclude }: Options, event: Record<string, unknown>) {
+function getMatches({ include, exclude }: Options, event: Record<string, unknown>) {
   return {
     include: formatHighlight(include, event),
     exclude: formatHighlight(exclude, event),

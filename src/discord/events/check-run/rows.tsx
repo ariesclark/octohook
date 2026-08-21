@@ -64,7 +64,7 @@ const failed = new Set(["failure", "timed_out", "startup_failure", "action_requi
 /** A failure earns the room to explain itself; a warning on a passing job does not. */
 const shown = { failed: 5, passed: 2 };
 
-export function jobFailed(job: BoardJob): boolean {
+function jobFailed(job: BoardJob): boolean {
   return failed.has(job.conclusion ?? "");
 }
 
@@ -81,7 +81,7 @@ export function arrived(deployments: BoardDeployment[]): BoardDeployment[] {
 }
 
 /** What a job deployed, when the status said which job did it. */
-export function deploymentsOf(job: BoardJob, deployments: BoardDeployment[] = []) {
+function deploymentsOf(job: BoardJob, deployments: BoardDeployment[] = []) {
   return arrived(deployments).filter(({ jobUrl }) => jobUrl && jobUrl === job.url);
 }
 
@@ -102,7 +102,7 @@ function jobSpeaks(job: BoardJob, deployments: BoardDeployment[] = []): boolean 
 }
 
 /** What deployed with no job to hang from: a status that named none, or a job not being shown. */
-export function looseDeployments(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
+function looseDeployments(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
   const urls = new Set(jobs.map(({ url }) => url));
 
   return arrived(deployments).filter(({ jobUrl }) => !jobUrl || !urls.has(jobUrl));

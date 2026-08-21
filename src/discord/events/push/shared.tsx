@@ -1,7 +1,6 @@
 import { GithubEvent } from "../../../github";
 import { githubAvatarUrl } from "../../theme";
 import { Ref } from "../../components/ref";
-import { RepositoryName } from "../../components/repository-name";
 import { HookScope } from "../../refs";
 
 export type PushEvent = Extract<GithubEvent, { type: "push" }>;
@@ -23,32 +22,9 @@ export function pushSender({ sender, pusher }: PushEvent) {
   );
 }
 
-export function pushSummary(event: PushEvent): string {
+function pushSummary(event: PushEvent): string {
   const count = event.commits.length;
   return `${count} new ${count === 1 ? "commit" : "commits"}`;
-}
-
-export function PushHeadline({ event, branch }: PushVariantProps): string {
-  const { repository, compare } = event;
-  const sender = pushSender(event);
-
-  return (
-    <b>
-      <RepositoryName repository={repository} /> {sender.login} pushed{" "}
-      <a href={compare}>{pushSummary(event)}</a> to <code>{branch}</code>
-    </b>
-  );
-}
-
-export function pushTimestamp(event: PushEvent): string | Date | undefined {
-  const head = event.head_commit?.timestamp;
-  if (head) return head;
-
-  // `repository.pushed_at` is epoch seconds on push payloads, not milliseconds.
-  const pushed = event.repository.pushed_at;
-  if (typeof pushed === "number") return new Date(pushed * 1000);
-
-  return pushed ?? undefined;
 }
 
 export function displayUsername(username: string): string {

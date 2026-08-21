@@ -3,14 +3,14 @@ import { displayUsername, PushCommit } from "./shared";
 /** High enough that a real subject survives whole; a cut-off subject reads worse than a long one. */
 const subjectLimit = 128;
 
-export function firstLine(message: string): string {
+function firstLine(message: string): string {
   const [line = ""] = message.split("\n");
   const flattened = line.replaceAll("`", "'");
 
   return flattened.length > subjectLimit ? `${flattened.slice(0, subjectLimit - 1)}…` : flattened;
 }
 
-export function profileUrl(username: string): string {
+function profileUrl(username: string): string {
   const appSlug = username.match(/^(.+)\[bot\]$/)?.[1];
   if (appSlug) return `https://github.com/apps/${encodeURIComponent(appSlug)}`;
 
@@ -54,42 +54,7 @@ export function CommitLine({
   );
 }
 
-export function OverflowLine({ hidden }: { hidden: number }): string {
-  return <small>… and {hidden} more</small>;
-}
-
-export function CommitList({
-  commits,
-  limit,
-  codeMessage = false,
-  omitAuthor,
-}: {
-  commits: PushCommit[];
-  limit: number;
-  codeMessage?: boolean;
-  omitAuthor?: string;
-}): string {
-  const showAuthor = !hasSingleAuthor(commits);
-
-  const lines = commits
-    .slice(0, limit)
-    .map((commit) => (
-      <CommitLine
-        commit={commit}
-        codeMessage={codeMessage}
-        showAuthor={showAuthor}
-        omitAuthor={omitAuthor}
-      />
-    ));
-  if (commits.length > limit) lines.push(<OverflowLine hidden={commits.length - limit} />);
-  return lines.join("\n");
-}
-
-/**
- * What a commit line actually occupies on screen: the markdown around a link is invisible,
- * so its length says nothing about whether the line will wrap.
- */
-export function commitWidth(
+function commitWidth(
   commit: PushCommit,
   { showAuthor = true, omitAuthor }: { showAuthor?: boolean; omitAuthor?: string } = {},
 ): number {
@@ -135,99 +100,3 @@ export function besideThumbnail(
  * much room they take. This fits as many rendered lines as the budget holds, and the overflow
  * line has to fit too — otherwise trimming to make room for it takes the room it needed.
  */
-export function FittedCommitList({
-  commits,
-  characters,
-  codeMessage = false,
-  omitAuthor,
-  showAuthor: showAuthorProp,
-}: {
-  commits: PushCommit[];
-  characters: number;
-  codeMessage?: boolean;
-  omitAuthor?: string;
-  /** Decided by the caller when the list is split, so both halves agree. */
-  showAuthor?: boolean;
-}): string {
-  const showAuthor = showAuthorProp ?? !hasSingleAuthor(commits);
-
-  const rendered = commits.map((commit) => (
-    <CommitLine
-      commit={commit}
-      codeMessage={codeMessage}
-      showAuthor={showAuthor}
-      omitAuthor={omitAuthor}
-    />
-  ));
-
-  let used = 0;
-  let shown = 0;
-
-  for (const line of rendered) {
-    const hidden = commits.length - (shown + 1);
-    const tail = hidden > 0 ? 1 + (<OverflowLine hidden={hidden} />).length : 0;
-    const next = used + (shown > 0 ? 1 : 0) + line.length;
-
-    if (next + tail > characters) break;
-
-    used = next;
-    shown += 1;
-  }
-
-  // One commit says more than a bare count, even where the budget disagrees.
-  if (shown === 0 && rendered.length > 0) shown = 1;
-
-  const lines = rendered.slice(0, shown);
-  if (commits.length > shown) lines.push(<OverflowLine hidden={commits.length - shown} />);
-
-  return lines.join("\n");
-}
-
-export function CommitLines({
-  commits,
-  showAuthor,
-  omitAuthor,
-}: {
-  commits: PushCommit[];
-  showAuthor?: boolean;
-  omitAuthor?: string;
-}): string {
-  return commits
-    .map((commit) => <CommitLine commit={commit} showAuthor={showAuthor} omitAuthor={omitAuthor} />)
-    .join("\n");
-}
-
-export function CodeCommitList({
-  commits,
-  limit = 5,
-}: {
-  commits: PushCommit[];
-  limit?: number;
-}): string {
-  const lines = commits
-    .slice(0, limit)
-    .map(
-      ({ id, message, author }) =>
-        `${id.slice(0, 7)} ${firstLine(message)} — ${author.username ? displayUsername(author.username) : author.name}`,
-    );
-
-  if (commits.length > limit) lines.push(`… and ${commits.length - limit} more`);
-
-  return <codeblock>{lines.join("\n")}</codeblock>;
-}
-
-export function SmallCommitLines({
-  commits,
-  limit = 10,
-}: {
-  commits: PushCommit[];
-  limit?: number;
-}): string {
-  const lines = commits.slice(0, limit).map((commit) => (
-    <small>
-      <CommitLine commit={commit} />
-    </small>
-  ));
-  if (commits.length > limit) lines.push(<OverflowLine hidden={commits.length - limit} />);
-  return lines.join("\n");
-}

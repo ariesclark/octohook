@@ -13,7 +13,7 @@ export type MessageComponent = {
   accessory?: MessageComponent;
 };
 
-export function flattenComponents(components: MessageComponent[]): MessageComponent[] {
+function flattenComponents(components: MessageComponent[]): MessageComponent[] {
   return components.flatMap((component) => [
     component,
     ...flattenComponents(component.components ?? []),
