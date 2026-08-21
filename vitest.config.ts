@@ -32,9 +32,6 @@ export default defineConfig({
     commonBuild,
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
-      // A secret, so no config file declares it and the pool would otherwise leave it unset —
-      // which is the tokenless path, where a run has no trigger and belongs to no push.
-      miniflare: { bindings: { GITHUB_TOKEN: "test-token" } },
     }),
   ],
   oxc: {

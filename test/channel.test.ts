@@ -32,10 +32,15 @@ const repository = {
 type Call = { method: string; url: string; body: Record<string, unknown> };
 
 let calls: Call[] = [];
+let lookups: Array<{ url: string; authorization: string | null }> = [];
 let posted = 0;
+
+/** The token now rides on the hook's own url rather than being one secret for the whole worker. */
+const token = "github-token";
 
 beforeEach(() => {
   calls = [];
+  lookups = [];
   posted = 0;
 
   channel = `channel-${++nth}`;
@@ -44,12 +49,16 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (input: RequestInfo, init?: RequestInit) => {
     const url = typeof input === "string" ? input : (input as Request).url;
 
-    // What a check run will not say about itself. Without the trigger a run belongs to no push
-    // and is drawn on its own, which is the tokenless behaviour, not the one under test here.
-    if (url.endsWith("/actions/runs/900"))
-      return Response.json({ name: "frontend", run_number: 12, event: "push" });
+    if (url.startsWith("https://api.github.com")) {
+      lookups.push({ url, authorization: new Headers(init?.headers).get("authorization") });
 
-    if (url.startsWith("https://api.github.com")) return new Response(null, { status: 404 });
+      // What a check run will not say about itself. Without the trigger a run belongs to no push
+      // and is drawn on its own, which is the tokenless behaviour, not the one under test here.
+      if (url.endsWith("/actions/runs/900"))
+        return Response.json({ name: "frontend", run_number: 12, event: "push" });
+
+      return new Response(null, { status: 404 });
+    }
 
     calls.push({
       method: init?.method ?? "GET",
@@ -62,6 +71,9 @@ beforeEach(() => {
 });
 
 const stub = (name = channel) => env.CHANNEL.getByName(name);
+
+const deliver = (object: ReturnType<typeof stub>, deliveries: Folded[], to = secret) =>
+  object.deliver({ secret: to, hook: "organization", token, deliveries });
 
 /**
  * Retention is measured against when a thing happened, so a fixture with a date written into it
@@ -120,9 +132,9 @@ describe("Channel", () => {
     const object = stub();
     const pushed = secondsAgo(30);
 
-    await object.deliver(secret, "organization", [push(pushed, "abc1234")]);
-    await object.deliver(secret, "organization", [job(secondsAgo(29), "abc1234", "b", null)]);
-    await object.deliver(secret, "organization", [job(secondsAgo(28), "abc1234", "b", "failure")]);
+    await deliver(object, [push(pushed, "abc1234")]);
+    await deliver(object, [job(secondsAgo(29), "abc1234", "b", null)]);
+    await deliver(object, [job(secondsAgo(28), "abc1234", "b", "failure")]);
 
     expect(sent()).toHaveLength(0);
 
@@ -136,12 +148,10 @@ describe("Channel", () => {
   it("edits the message it already has rather than posting another", async () => {
     const object = stub();
 
-    await object.deliver(secret, "organization", [push(secondsAgo(30), "abc1234")]);
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
     await runDurableObjectAlarm(object);
 
-    await object.deliver(secret, "organization", [
-      job(secondsAgo(25), "abc1234", "typescript", "failure"),
-    ]);
+    await deliver(object, [job(secondsAgo(25), "abc1234", "typescript", "failure")]);
     await runDurableObjectAlarm(object);
 
     expect(posts()).toHaveLength(1);
@@ -154,11 +164,11 @@ describe("Channel", () => {
     const object = stub();
     const pushed = secondsAgo(30);
 
-    await object.deliver(secret, "organization", [push(pushed, "abc1234")]);
+    await deliver(object, [push(pushed, "abc1234")]);
     await runDurableObjectAlarm(object);
 
     // The same delivery again: understood, folded, and identical once drawn.
-    await object.deliver(secret, "organization", [push(pushed, "abc1234")]);
+    await deliver(object, [push(pushed, "abc1234")]);
     await runDurableObjectAlarm(object);
 
     expect(sent()).toHaveLength(1);
@@ -168,14 +178,12 @@ describe("Channel", () => {
   it("keeps the message it holds across being evicted", async () => {
     const object = stub();
 
-    await object.deliver(secret, "organization", [push(secondsAgo(30), "abc1234")]);
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
     await runDurableObjectAlarm(object);
 
     await evictDurableObject(object);
 
-    await object.deliver(secret, "organization", [
-      job(secondsAgo(25), "abc1234", "typescript", "failure"),
-    ]);
+    await deliver(object, [job(secondsAgo(25), "abc1234", "typescript", "failure")]);
     await runDurableObjectAlarm(object);
 
     expect(posts()).toHaveLength(1);
@@ -188,8 +196,8 @@ describe("Channel", () => {
     const object = stub();
 
     await Promise.all([
-      object.deliver(secret, "organization", [job(secondsAgo(30), "abc1234", "one", "success")]),
-      object.deliver(secret, "organization", [job(secondsAgo(29), "abc1234", "two", "failure")]),
+      deliver(object, [job(secondsAgo(30), "abc1234", "one", "success")]),
+      deliver(object, [job(secondsAgo(29), "abc1234", "two", "failure")]),
     ]);
 
     await runInDurableObject(stub(), async (_instance: Channel, state) => {
@@ -205,8 +213,8 @@ describe("Channel", () => {
   it("draws two channels apart from each other", async () => {
     const [one, two] = [`${channel}-one`, `${channel}-two`];
 
-    await stub(one).deliver(`${one}/token`, "organization", [push(secondsAgo(30), "abc1234")]);
-    await stub(two).deliver(`${two}/token`, "organization", [push(secondsAgo(30), "def5678")]);
+    await deliver(stub(one), [push(secondsAgo(30), "abc1234")], `${one}/token`);
+    await deliver(stub(two), [push(secondsAgo(30), "def5678")], `${two}/token`);
 
     await runDurableObjectAlarm(stub(one));
     await runDurableObjectAlarm(stub(two));
@@ -216,16 +224,50 @@ describe("Channel", () => {
     expect(posts()[1]!.url).toContain(`/webhooks/${two}/token`);
   });
 
+  // The token rides on the hook's own url, so two hooks can carry two tokens, and nothing about
+  // it reaches storage — the alarm draws what is already folded and looks nothing up.
+  it("looks up a run with the token the delivery carried", async () => {
+    await stub().deliver({
+      secret,
+      hook: "organization",
+      token: "a-particular-token",
+      deliveries: [job(secondsAgo(30), "abc1234", "build", "success")],
+    });
+
+    expect(lookups).toHaveLength(1);
+    expect(lookups[0]!.url).toContain("/actions/runs/900");
+    expect(lookups[0]!.authorization).toBe("Bearer a-particular-token");
+  });
+
+  it("looks nothing up when the hook carries no token", async () => {
+    await stub().deliver({
+      secret,
+      hook: "organization",
+      deliveries: [job(secondsAgo(30), "abc1234", "build", "success")],
+    });
+
+    expect(lookups).toHaveLength(0);
+  });
+
+  it("never writes the token to storage", async () => {
+    await deliver(stub(), [push(secondsAgo(30), "abc1234")]);
+
+    await runInDurableObject(stub(), async (_instance: Channel, state) => {
+      const stored = [...state.storage.kv.list({})].map(([, value]) => JSON.stringify(value));
+      expect(stored.some((value) => value.includes(token))).toBe(false);
+    });
+  });
+
   // A message the world lets go of stays in the channel; only one it no longer draws comes down.
   it("stops redrawing a commit it has forgotten without taking it down", async () => {
     const object = stub();
 
-    await object.deliver(secret, "organization", [
+    await deliver(object, [
       push(new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), "abc1234"),
     ]);
     await runDurableObjectAlarm(object);
 
-    await object.deliver(secret, "organization", [push(secondsAgo(1), "def5678")]);
+    await deliver(object, [push(secondsAgo(1), "def5678")]);
     await runDurableObjectAlarm(object);
 
     expect(deletes()).toHaveLength(0);

@@ -18,6 +18,11 @@ import { apply, emptyWorld, forget, type Repository, type World } from "./state.
  * what is below it. Sharded per commit, none of those can be said at all.
  */
 
+/**
+ * Everything the drawing needs that the world does not carry. The GitHub token is deliberately
+ * not here: every lookup happens in `deliver`, so the alarm needs no credentials, and one that is
+ * never written is one that cannot be read back out of storage.
+ */
 type Meta = {
   /** The full `<id>/<token>`, which the id this object is named for does not carry. */
   secret: string;
@@ -35,12 +40,33 @@ const maximumWait = 15_000;
 /** A commit that has said nothing for this long is not news any more, and is let go of. */
 const retention = 6 * 60 * 60 * 1000;
 
+export type Batch = {
+  secret: string;
+  hook: HookScope;
+  /** The hook's own GitHub token, off its url. Absent, every board draws with less in it. */
+  token?: string;
+  deliveries: Folded[];
+};
+
 export class Channel extends DurableObject<CloudflareBindings> {
   /**
    * A token belongs to whoever is doing the resolving. At module scope it would be one channel's
-   * credentials in the hands of every other instance sharing the isolate.
+   * credentials in the hands of every other instance sharing the isolate — and a channel does not
+   * own one either, since two hooks pointing here can carry two different tokens. This is only a
+   * cache: the answers a token has already fetched, kept for as long as the one token keeps
+   * arriving, and thrown away rather than reused when a different one does.
    */
-  #github: Github = createGithub(this.env.GITHUB_TOKEN);
+  #github: Github | undefined;
+  #token: string | undefined;
+
+  #githubFor(token: string | undefined): Github {
+    if (!this.#github || this.#token !== token) {
+      this.#github = createGithub(token);
+      this.#token = token;
+    }
+
+    return this.#github;
+  }
 
   /**
    * Folds a batch into the channel and says when it will next be drawn.
@@ -51,13 +77,14 @@ export class Channel extends DurableObject<CloudflareBindings> {
    * close. Once the last lookup is done the fold runs to completion with no await in it, and no
    * other delivery can see the world between the read and the write.
    */
-  async deliver(secret: string, hook: HookScope, deliveries: Folded[]): Promise<number> {
+  async deliver({ secret, hook, token, deliveries }: Batch): Promise<number> {
+    const github = this.#githubFor(token);
     const resolved = [];
 
     for (const delivery of deliveries)
       resolved.push([
         delivery,
-        await resolveFor(delivery, this.#github, async () => delivery.content),
+        await resolveFor(delivery, github, async () => delivery.content),
       ] as const);
 
     const { kv } = this.ctx.storage;
