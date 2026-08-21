@@ -16,6 +16,7 @@ import {
   unredirectLinks,
 } from "../../../markdown/transform";
 import { Ref } from "../../components/ref";
+import { t, type Phrase } from "../../messages.ts";
 import { HookScope } from "../../refs";
 import { WebhookContent } from "../../types";
 import { displayUsername } from "../push/shared";
@@ -106,10 +107,27 @@ function Branch({
 function SeeMore({ event }: { event: PullRequestEvent }) {
   return (
     <actionrow>
-      <button style={ButtonStyle.Link} url={event.pull_request.html_url} label="See more" />
+      <button style={ButtonStyle.Link} url={event.pull_request.html_url} label={t("pull.more")} />
     </actionrow>
   );
 }
+
+/**
+ * One phrase per action, not one phrase branching on it: "marked ready for review" and "merged"
+ * are different sentences, and a language that reorders one has no reason to reorder the other.
+ * An action the catalogue has no sentence for keeps GitHub's own word.
+ */
+const headlines: Partial<Record<string, Phrase>> = {
+  opened: "pull.opened",
+  reopened: "pull.reopened",
+  merged: "pull.merged",
+  closed: "pull.closed",
+  updated: "pull.updated",
+  renamed: "pull.renamed",
+  retargeted: "pull.retargeted",
+  "marked ready for review": "pull.ready",
+  "converted to draft": "pull.draft",
+};
 
 export function PullRequestMessage({
   event,
@@ -134,24 +152,12 @@ export function PullRequestMessage({
     <message {...identity(event)}>
       <text>
         <b>
-          {open ? "wants to merge " : `${action} `}
-          <Reference event={event} />
-          {head ? (
-            <>
-              {" from "}
-              <Branch event={event} side="head" hook={hook} />
-            </>
-          ) : (
-            ""
-          )}
-          {base ? (
-            <>
-              {" into "}
-              <Branch event={event} side="base" hook={hook} />
-            </>
-          ) : (
-            ""
-          )}
+          {t(headlines[action] ?? "pull.other", {
+            action,
+            reference: <Reference event={event} />,
+            head: head ? <Branch event={event} side="head" hook={hook} /> : "",
+            base: base ? <Branch event={event} side="base" hook={hook} /> : "",
+          })}
         </b>
         <br />
         {pull_request.title}

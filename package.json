@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",
+    "@rrazvan.dev/oxlint-plugin-i18n-literal": "^1.0.1",
     "@types/invariant": "^2.2.37",
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.2.0",

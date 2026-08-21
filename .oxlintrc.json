@@ -4,9 +4,23 @@
     {
       "name": "i18next",
       "specifier": "eslint-plugin-i18next"
+    },
+    {
+      "name": "i18n-literal",
+      "specifier": "@rrazvan.dev/oxlint-plugin-i18n-literal"
     }
   ],
+  "settings": {
+    "i18n-literal": {
+      "presets": [],
+      "translationFunctionNames": ["t", "tOf"],
+      "ignoredAttributes": ["username"]
+    }
+  },
   "rules": {
-    "i18next/no-literal-string": "warn"
+    "i18next/no-literal-string": "warn",
+    "i18n-literal/no-literal-string": "warn",
+    "i18n-literal/no-literal-jsx-attribute": "warn",
+    "i18n-literal/no-literal-template": "warn"
   }
 }

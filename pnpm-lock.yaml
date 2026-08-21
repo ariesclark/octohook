@@ -66,6 +66,9 @@ importers:
       '@cloudflare/vitest-plugin':
         specifier: ^1.0.0
         version: 1.0.0(@vitest/runner@4.1.11)(@vitest/snapshot@4.1.11)(vitest@4.1.11(@types/node@26.2.0)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)))
+      '@rrazvan.dev/oxlint-plugin-i18n-literal':
+        specifier: ^1.0.1
+        version: 1.0.1(oxlint@1.78.0)
       '@types/invariant':
         specifier: ^2.2.37
         version: 2.2.37
@@ -821,6 +824,12 @@ packages:
 
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
+
+  '@rrazvan.dev/oxlint-plugin-i18n-literal@1.0.1':
+    resolution: {integrity: sha512-mI7cSYbyyU1Z1Tfbhn+IHlN8F9v2a0cRTTkDzPC7VGa8iuMqe/b3KxqX4e5CDz0Yviai5CFxcKwIn/Y3Ldn3xg==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      oxlint: '>=1.70.0'
 
   '@sindresorhus/is@7.2.0':
     resolution: {integrity: sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw==}
@@ -2071,6 +2080,10 @@ snapshots:
     optional: true
 
   '@rolldown/pluginutils@1.0.1': {}
+
+  '@rrazvan.dev/oxlint-plugin-i18n-literal@1.0.1(oxlint@1.78.0)':
+    dependencies:
+      oxlint: 1.78.0
 
   '@sindresorhus/is@7.2.0': {}
 

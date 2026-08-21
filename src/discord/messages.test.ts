@@ -31,6 +31,12 @@ describe("the catalogue", () => {
     }
   });
 
+  // A translator opens this file to find a phrase, not to read it end to end. oxlint does not
+  // lint JSON, so nothing else can keep the order.
+  test("is in order", () => {
+    assert.deepEqual(phrases, [...phrases].sort());
+  });
+
   // What goes into a phrase here is markdown, and MessageFormat isolates a value by default —
   // which puts an invisible control character inside a link Discord then has to read literally.
   test("puts nothing invisible around what it is given", () => {
