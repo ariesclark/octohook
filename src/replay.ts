@@ -1,5 +1,4 @@
 import { getWebhookRequest } from "./discord";
-import { setGithubToken } from "./discord/events/check-run/run";
 import { GithubEvent } from "./github";
 import { mergeRequests } from "./merge";
 
@@ -43,8 +42,6 @@ const secret =
 if (import.meta.main) {
   const [path, mode = "preview"] = process.argv.slice(2);
   if (!path) throw new Error("usage: bun src/replay.ts <deliveries.jsonl> [preview|post]");
-
-  setGithubToken(process.env.GITHUB_TOKEN);
 
   const requests: Request[] = [];
   for (const delivery of readDeliveries(path)) {
