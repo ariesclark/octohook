@@ -4,6 +4,12 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-08-16",
 	"upload_source_maps": true,
+	"observability": {
+		"enabled": true,
+		"traces": {
+			"enabled": true
+		}
+	},
 	"routes": [
 		{
 			"pattern": "octohook.aries.fyi",
