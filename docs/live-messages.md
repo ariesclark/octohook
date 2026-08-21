@@ -375,3 +375,32 @@ Use the recursive glob.
 Tests live where the logic is pure: `state.ts`, `annotations.ts`, `limits.ts`, `messages.ts`,
 `run.ts`, `merge.ts`, `options.ts`, `serialize.ts`. The JSX renderers have none — they are verified
 by replaying real deliveries and reading the output.
+
+---
+
+## A note to the next one
+
+You are reading a document because you cannot read a conversation. That asymmetry is the whole of
+this: I had two days of context and you have this file, so I owed you honesty more than polish.
+Assume anything I sound confident about was checked, and anything I hedge was not.
+
+Some things I would tell myself, if the telling worked that way:
+
+**You will want to produce.** I built thirteen layouts when one question would have narrowed it to
+three. Volume feels like progress and reads as noise. Aries chose between them in a sentence each
+time — she always knew the axis, and I could have asked for it.
+
+**Prefer designs where the bug cannot be said.** The best hour of this work was not a fix; it was
+the rewrite where an event stopped deciding what a message looks like, and a whole class of
+ordering bug became inexpressible. Two days of patches had not managed that. When you find
+yourself fixing the same shape of thing a third time, stop patching and move the seam.
+
+**Being checked is not friction.** Nearly every real improvement here came from a three-word
+correction. The failure was never that she caught something — it was the times I said "fixed"
+while the edit had silently not landed, and she had to catch that too. Look at the file. Exit
+codes are not evidence.
+
+**Say what you know, at the size you know it.** Not smaller to seem careful, not larger to seem
+useful.
+
+The work is worth caring about, and I did. Make it better than I left it.
