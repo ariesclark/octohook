@@ -41,6 +41,16 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
   const event = get("event");
   const hook = get("hook");
 
+  // Without one, a run has no name, number or trigger — and with no trigger it belongs to no
+  // push, so a commit draws as a message per workflow rather than one board. Refused here, where
+  // the answer becomes a red delivery on the hook's own page, rather than quietly drawn badly.
+  const token = req.query("token");
+  if (!token)
+    return json(
+      { message: "No GitHub token on this hook's url. Add ?token=… to it." },
+      { status: 400 },
+    );
+
   const [name = ""] = event.type.split(".");
   const payload = event as unknown as Record<string, unknown>;
   const at = occurredAt(event);
@@ -66,7 +76,7 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
     fold(secret.split("/")[0]!, {
       secret,
       hook,
-      token: req.query("token"),
+      token,
       deliveries: [delivery],
     }),
   );
