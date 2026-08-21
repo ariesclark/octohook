@@ -22,7 +22,7 @@ export function BranchCreated({ event, branch, hook }: PushVariantProps): Webhoo
   return (
     <RefMessage event={event}>
       <b>
-        {lead(marks.inflight)}created branch{" "}
+        {lead(marks.quiet)}created branch{" "}
         <Ref repository={event.repository} refName={branch} hook={hook} />
       </b>
     </RefMessage>
@@ -33,7 +33,7 @@ export function TagPushed({ event, branch, hook }: PushVariantProps): WebhookCon
   return (
     <RefMessage event={event}>
       <b>
-        {lead(marks.inflight)}pushed tag{" "}
+        {lead(marks.quiet)}pushed tag{" "}
         <Ref repository={event.repository} refName={`refs/tags/${branch}`} hook={hook} />
       </b>
     </RefMessage>

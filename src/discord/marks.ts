@@ -18,13 +18,10 @@ export const marks = {
   /** It ran, and something about it wants a second look — but the run is not lost. */
   warning: ":small_orange_diamond:",
 
-  /** Still going: a job running, a deployment on its way, an issue nobody has closed. */
-  inflight: ":white_medium_small_square:",
-
   /** Deliberately not done: skipped, cancelled, closed unmerged, torn down. */
   dropped: ":black_small_square:",
 
-  /** Finished with no verdict either way: neutral, stale, still a draft. */
+  /** Nothing to report, yet or ever: still running, neutral, stale, still a draft. */
   quiet: ":white_small_square:",
 } as const;
 
@@ -54,23 +51,13 @@ export function checkMark(conclusion: string | null | undefined): Mark {
   return conclusions[conclusion] ?? marks.quiet;
 }
 
-/**
- * A workflow run arrives before it finishes, so no conclusion means it is still going —
- * unlike a check run, which is only rendered once it has completed.
- */
-export function workflowMark(conclusion: string | null | undefined): Mark {
-  if (!conclusion) return marks.inflight;
-
-  return checkMark(conclusion);
-}
-
 const deploymentStates: Record<string, Mark> = {
   success: marks.good,
   failure: marks.bad,
   error: marks.bad,
-  in_progress: marks.inflight,
-  queued: marks.inflight,
-  pending: marks.inflight,
+  in_progress: marks.quiet,
+  queued: marks.quiet,
+  pending: marks.quiet,
   inactive: marks.dropped,
 };
 
@@ -82,7 +69,7 @@ export function deploymentMark(state: string | null | undefined): Mark {
 
 export function issueMark(action: string, reason: string | null | undefined): Mark {
   if (action === "closed") return reason === "not_planned" ? marks.dropped : marks.good;
-  if (action === "opened" || action === "reopened") return marks.inflight;
+  if (action === "opened" || action === "reopened") return marks.quiet;
 
   return marks.quiet;
 }

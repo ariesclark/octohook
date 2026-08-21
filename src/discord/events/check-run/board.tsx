@@ -40,15 +40,15 @@ function runUrl(repositoryUrl: string, runId?: string): string | undefined {
  * deployed is judged on the deployment, since `every` over no jobs is vacuously true and would
  * read as though the whole thing had been skipped.
  */
-function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
+export function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
   if (
     jobs.some(({ conclusion }) => conclusion === "failure" || conclusion === "timed_out") ||
     deployments.some(({ state }) => state === "failure" || state === "error")
   )
     return marks.bad;
 
-  if (jobs.some(({ conclusion }) => !conclusion)) return marks.inflight;
-  if (deployments.some(({ state }) => underway.has(state))) return marks.inflight;
+  if (jobs.some(({ conclusion }) => !conclusion)) return marks.quiet;
+  if (deployments.some(({ state }) => underway.has(state))) return marks.quiet;
 
   if (jobs.length === 0)
     return deployments.some(({ state }) => state === "success") ? marks.good : marks.quiet;
@@ -151,11 +151,9 @@ export function CommitBoard({
         return [
           ...spacer,
           <text>
-            <small>
-              {lead(boardMark(entry.jobs, entry.deployments))}
-              {url ? <a href={url}>{title}</a> : title}
-              {summary ? ` • ${summary}` : ""}
-            </small>
+            {lead(boardMark(entry.jobs, entry.deployments))}
+            {url ? <a href={url}>{title}</a> : title}
+            {summary ? ` • ${summary}` : ""}
             {rows.length > 0 ? <br /> : ""}
             {rows}
           </text>,

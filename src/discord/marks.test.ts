@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  checkMark,
-  deploymentMark,
-  issueMark,
-  marks,
-  severityMark,
-  workflowMark,
-} from "./marks.ts";
+import { checkMark, deploymentMark, issueMark, marks, severityMark } from "./marks.ts";
 
 describe("marks", () => {
   it("gives every state a distinct mark", () => {
@@ -45,19 +38,7 @@ describe("checkMark", () => {
   // person is a warning, where a check that is simply still going is not.
   it("marks a check waiting on a person as a warning", () => {
     assert.equal(checkMark("action_required"), marks.warning);
-    assert.notEqual(checkMark("action_required"), marks.inflight);
-  });
-});
-
-describe("workflowMark", () => {
-  it("reads a run with no conclusion as still going", () => {
-    assert.equal(workflowMark(null), marks.inflight);
-    assert.notEqual(workflowMark(null), checkMark(null));
-  });
-
-  it("agrees with checkMark once there is a conclusion", () => {
-    for (const conclusion of ["success", "failure", "timed_out", "skipped", "stale"])
-      assert.equal(workflowMark(conclusion), checkMark(conclusion));
+    assert.notEqual(checkMark("action_required"), marks.quiet);
   });
 });
 
@@ -67,9 +48,9 @@ describe("deploymentMark", () => {
   });
 
   it("counts queued and pending as in flight", () => {
-    assert.equal(deploymentMark("queued"), marks.inflight);
-    assert.equal(deploymentMark("pending"), marks.inflight);
-    assert.equal(deploymentMark("in_progress"), marks.inflight);
+    assert.equal(deploymentMark("queued"), marks.quiet);
+    assert.equal(deploymentMark("pending"), marks.quiet);
+    assert.equal(deploymentMark("in_progress"), marks.quiet);
   });
 
   it("reads a torn-down deployment as dropped", () => {
@@ -89,8 +70,8 @@ describe("issueMark", () => {
   });
 
   it("reads an open issue as active", () => {
-    assert.equal(issueMark("opened", null), marks.inflight);
-    assert.equal(issueMark("reopened", null), marks.inflight);
+    assert.equal(issueMark("opened", null), marks.quiet);
+    assert.equal(issueMark("reopened", null), marks.quiet);
   });
 });
 

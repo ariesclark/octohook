@@ -1,8 +1,8 @@
 import { GithubEvent } from "../../../github";
-import { workflowMark } from "../../marks";
+import { checkMark } from "../../marks";
 import { tOf } from "../../messages.ts";
 
-export { workflowMark as runConclusionMark };
+export { checkMark as runConclusionMark };
 
 export type WorkflowRunEvent = Extract<GithubEvent, { type: `workflow_run.${string}` }>;
 

@@ -1,9 +1,11 @@
 import {
+  boardMark,
   CommitBoard,
   RunBoard,
   type Board,
   type CommitBoardEntry,
 } from "./discord/events/check-run/board";
+import { marks } from "./discord/marks";
 import { workflowName } from "./discord/events/workflow-run/shared";
 import type { HookScope } from "./discord/refs";
 import { isFoldable } from "./foldable.ts";
@@ -27,6 +29,19 @@ export type Composed = {
 
 /** How far apart two things may be said and still read as one message. */
 const mergeWindow = 60_000;
+
+/**
+ * What a reader wants first: what broke, then what is still deciding, then what is fine. A run
+ * moves up this order as it goes wrong, which does move a row under the reader's eye mid-run —
+ * the cost of leading with the thing worth reading.
+ */
+const order = [marks.bad, marks.expired, marks.warning, marks.quiet, marks.good, marks.dropped];
+
+function ranked(run: Run): string {
+  const rank = order.indexOf(boardMark(run.jobs, run.deployments));
+
+  return String(rank === -1 ? order.length : rank);
+}
 
 /** A run with no workflow behind it sorts under what it calls itself, and last of all. */
 function named(run: Run): string {
@@ -67,11 +82,14 @@ export function compose(world: World, repository: Repository, hook?: HookScope):
 
   for (const note of world.notes) {
     // Insertion order is whichever run's first job GitHub happened to deliver first, so the same
-    // commit reads differently every time. Name is fixed for a run's whole life, where a sort on
-    // how it is going would move a row the moment it went red — under a reader's eye, mid-run.
+    // commit reads differently every time. How a run is going leads, and its name breaks the tie,
+    // so two runs at the same status keep a fixed order between them.
     const runs = [...world.runs.values()]
       .filter((run) => owner.get(run.id) === note.key)
-      .sort((left, right) => named(left).localeCompare(named(right)));
+      .sort(
+        (left, right) =>
+          ranked(left).localeCompare(ranked(right)) || named(left).localeCompare(named(right)),
+      );
 
     if (runs.length === 0) {
       composed.push({

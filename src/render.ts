@@ -24,7 +24,6 @@ const marks: Record<string, string> = {
   ":small_orange_diamond:": "🔸",
   ":black_small_square:": "▪️",
   ":white_small_square:": "▫️",
-  ":white_medium_small_square:": "◽",
 };
 
 function toMarkdown(components: MessageComponent[]): string {
