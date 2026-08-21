@@ -71,6 +71,17 @@ export function runnerNoise(annotation: Annotation): boolean {
 }
 
 /**
+ * What a check said, with the runner's own exit code dropped — unless that is the whole of it.
+ * A job whose tool wrote no annotations has nothing else to offer, and a failing row with no
+ * reason under it tells a reader less than a restated exit code does.
+ */
+export function worthSaying(annotations: Annotation[]): Annotation[] {
+  const news = annotations.filter(runnerNoise);
+
+  return news.length > 0 ? news : annotations;
+}
+
+/**
  * What broke, before what merely complained. Only so many annotations fit under a job, so the
  * order decides which ones a reader ever sees — and a tool that reports errors and warnings
  * together reports them in whatever order it walked the file.

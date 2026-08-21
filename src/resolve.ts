@@ -1,4 +1,4 @@
-import { runnerNoise } from "./discord/events/check-run/annotations.ts";
+import { worthSaying } from "./discord/events/check-run/annotations.ts";
 import {
   runReferenceFrom,
   type Github,
@@ -85,7 +85,7 @@ export async function resolveFor(
     run: await github.resolveRun(reference),
     annotations:
       says && check
-        ? (await github.resolveAnnotations(reference.repository, check.id)).filter(runnerNoise)
+        ? worthSaying(await github.resolveAnnotations(reference.repository, check.id))
         : undefined,
   };
 }

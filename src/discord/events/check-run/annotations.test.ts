@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { annotationText, bySeverity, fold, oneLine, runnerNoise } from "./annotations.ts";
+import {
+  annotationText,
+  bySeverity,
+  fold,
+  oneLine,
+  runnerNoise,
+  worthSaying,
+} from "./annotations.ts";
 import type { Annotation } from "./run.ts";
 
 function annotation(partial: Partial<Annotation> = {}): Annotation {
@@ -110,5 +117,24 @@ describe("bySeverity", () => {
       [...mixed].sort(bySeverity).map(({ message }) => message),
       ["b", "a"],
     );
+  });
+});
+
+describe("worthSaying", () => {
+  const noise = annotation({ message: "Process completed with exit code 2." });
+  const news = annotation({ message: "Property 'x' does not exist" });
+
+  test("drops the runner's exit code when a tool said something of its own", () => {
+    assert.deepEqual(worthSaying([noise, news]), [news]);
+  });
+
+  // Dropped when it is all there is, a failing job draws with no reason under it at all — and
+  // the exit code, restated or not, is the only thing anybody has to go on.
+  test("keeps the exit code when it is the only thing said", () => {
+    assert.deepEqual(worthSaying([noise]), [noise]);
+  });
+
+  test("says nothing when nothing was said", () => {
+    assert.deepEqual(worthSaying([]), []);
   });
 });
