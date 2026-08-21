@@ -42,9 +42,15 @@ alternatives side by side:
 
 - One reading of a run: only what failed or said something. (She compared `ledger`, `chips`,
   `verdict` and picked `verdict`.)
-- One layout: everything a run contains steps into a quote, the run's name stays at the margin.
-  (She compared thirteen and picked `aside`. The others are deleted.)
-- The run header is small text; the push headline is the only bold thing in the message.
+- One layout, arrived at over about twenty variants on 2026-08-21: **every line of a board is
+  small text**, and the run's name is the only thing bold in it. Nothing is indented, because
+  nothing survives — `> > ` draws the same single bar as `> `, two spaces are not an indent in a
+  proportional font, and `-#` unsets any indent on its own line. The size step is the hierarchy.
+  Rejected along the way, so do not re-offer them: quote bars, drawn gutters (`▏`), nested
+  quotes, em-space steps, `###` headings, coloured containers, and separator rules.
+- Only the run's line wears a mark. A job, an annotation and a deployment carry none.
+- Runs sort by how they are going, then by name. This reverses an earlier decision and she made
+  the reversal knowingly: a row does move when a run goes red.
 - Annotations are list items with no per-annotation icon. She asked for the opposite earlier in a
   different context — the current instruction stands.
 - No feature flags. Every `setX`/`showX` toggle was scaffolding for those comparisons and is gone.
@@ -201,6 +207,12 @@ that Discord rejected.
 - **Two ordinary spaces are not an indent** in a proportional font. A quote (`> `) is the one
   indent Discord draws a bar beside.
 - **A blank line ends a quote.** To space rows inside one, emit a quote line with nothing on it.
+- **There is no second quote level.** `> > ` draws the same single bar as `> `, so depth cannot be
+  spent twice. With `-#` also unable to carry an indent, one quote is the whole budget — anything
+  deeper has to come from the line's own content.
+- **An em space indents where two spaces do not.** `\u2003` is not whitespace to markdown or to a
+  proportional font, so it survives and takes up room. It is the only way to step a line in once
+  the quote bar is spent.
 - **A webhook can only delete a message whose id it captured at post time**, and cannot list a
   channel. Always post with `wait=true` — a replay in the wrong channel is only undoable while its
   ids are in hand.
@@ -272,6 +284,11 @@ absent — the board still draws, with less in it.
   Observed in a dry run (`dry-78, dry-90` → `dry-78` → `dry-78, dry-97`).
 - **A commit board's message moves** when a late push claims runs that were drawing on their own:
   the run message is taken down and the push message appears at the bottom.
+- **A hostless deployment repeats its job.** GitHub registers a deployment for any job-level
+  `environment:`, even one declared only to read secrets, and it arrives with no
+  `environment_url`. It now draws as unlinked text under the job that made it, which says little
+  the job did not. §10 has the fix, and it belongs on flirtual's side rather than here — a guess
+  at which hostless deployments are phantoms would drop real ones.
 - **Multipart messages** (an event carrying an avatar) deliver their words but drop the attachment.
   The channel object makes this worse, not better: `app.ts` now unwraps `payload_json` and throws
   the parts away.
