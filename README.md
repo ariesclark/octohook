@@ -27,7 +27,23 @@ and point your GitHub repository webhook (content type `application/json`) at:
 https://octohook.aries.fyi/<secret>?token=<github-token>
 ```
 
-The GitHub token is required. Lookups run under it for check run annotations, commit details, and the rest of what a payload doesn't carry, and a hook without one is refused.
+### The token
+
+`?token=` is required, and a hook without one is refused with a 400. Three lookups run under it, and no webhook payload carries what they return:
+
+- `GET /repos/{owner}/{repo}/actions/runs/{id}` for a run's name, its number, and what triggered it.
+- `GET /repos/{owner}/{repo}/actions/runs?check_suite_id={id}` to find the run behind a check created through the Checks API, which names no run of its own.
+- `GET /repos/{owner}/{repo}/check-runs/{id}/annotations` for the failure messages a board quotes under a job.
+
+A fine-grained personal access token needs read access to Actions and Checks on the repositories the hook covers; a classic token needs `repo`. Make one under Settings, Developer settings, Personal access tokens. A token that can't read one of those endpoints costs you what it would have said: the board draws the run as the payload describes it, with no name, no annotations, and no trigger.
+
+Filters go in the same URL:
+
+```
+https://octohook.aries.fyi/<secret>?token=<github-token>&exclude=sender.type:Bot
+```
+
+Anyone who can read the webhook URL can read the token, and GitHub shows the URL in full on the repository's webhook page. Give it the fewest repositories that work, and rotate it the way you'd rotate the Discord secret sitting next to it.
 
 ### What it draws
 
