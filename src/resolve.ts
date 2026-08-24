@@ -11,6 +11,13 @@ type CheckRun = { id: number; status: string; output?: { annotations_count?: num
 export function localReferenceFor(delivery: Delivery): RunReference | undefined {
   const { payload, event } = delivery;
 
+  if (event === "workflow_run") {
+    const repository = (payload.repository as { full_name?: string })?.full_name;
+    const runId = (payload.workflow_run as { id?: number })?.id;
+
+    return repository && runId ? { repository, runId: String(runId) } : undefined;
+  }
+
   const detailsUrl =
     event === "check_run"
       ? (payload.check_run as { details_url?: string })?.details_url

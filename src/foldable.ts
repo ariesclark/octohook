@@ -21,6 +21,7 @@ const commits: Record<string, string> = {
   deployment: "deployment.sha",
   deployment_status: "deployment.sha",
   push: "after",
+  workflow_run: "workflow_run.head_sha",
   pull_request: "pull_request.head.sha",
 };
 
@@ -78,6 +79,16 @@ const carried: Record<string, string[]> = {
     "deployment_status.log_url",
   ],
   push: [...repository, "after"],
+  workflow_run: [
+    ...repository,
+    "workflow_run.id",
+    "workflow_run.name",
+    "workflow_run.run_number",
+    "workflow_run.event",
+    "workflow_run.conclusion",
+    "workflow_run.head_sha",
+    "workflow_run.head_branch",
+  ],
   pull_request: [...repository, "pull_request.head.sha"],
 };
 

@@ -191,6 +191,32 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     return `suite settled → ${suite.conclusion ?? "no verdict"}`;
   }
 
+  if (event === "workflow_run") {
+    if (!resolved.runId) return "";
+
+    const workflow = payload.workflow_run as unknown as {
+      name: string;
+      run_number: number;
+      event: string;
+      conclusion: string | null;
+      head_sha?: string;
+      head_branch?: string;
+    };
+
+    const entry = run(world, resolved.runId, at, seen);
+    entry.run ??= resolved.run ?? {
+      name: workflow.name,
+      runNumber: workflow.run_number,
+      trigger: workflow.event,
+    };
+    entry.repository ??= repositoryIn(payload);
+    entry.sha ??= workflow.head_sha;
+    entry.branch ??= workflow.head_branch;
+    entry.settled = workflow.conclusion;
+
+    return `run settled → ${workflow.conclusion ?? "no verdict"}`;
+  }
+
   if (event === "deployment" || event === "deployment_status") {
     if (!resolved.runId) return "";
 

@@ -24,6 +24,21 @@ function checkRun(name: string, conclusion: string | null, extra: object = {}) {
   };
 }
 
+function workflowRun(conclusion: string | null, extra: object = {}) {
+  return {
+    workflow_run: {
+      id: 14244,
+      name: "Bot",
+      run_number: 14244,
+      event: "schedule",
+      conclusion,
+      head_sha: "abc1234",
+      head_branch: "main",
+      ...extra,
+    },
+  };
+}
+
 describe("apply", () => {
   test("adds a job to the run it belongs to", () => {
     const world = emptyWorld();
@@ -144,6 +159,54 @@ describe("apply", () => {
 
     assert.equal(changed, "suite settled → success");
     assert.equal(world.runs.get("7")!.settled, "success");
+  });
+
+  test("folds a workflow run into the run its checks already built", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "completed", checkRun("build", "success")), {
+      runId: "14244",
+    });
+
+    const changed = apply(world, delivery("workflow_run", "completed", workflowRun("success")), {
+      runId: "14244",
+    });
+
+    const entry = world.runs.get("14244")!;
+
+    assert.equal(changed, "run settled → success");
+    assert.equal(world.runs.size, 1);
+    assert.equal(world.notes.length, 0);
+    assert.equal(entry.settled, "success");
+    assert.equal(entry.jobs.length, 1);
+  });
+
+  test("takes a run's name, number and trigger off the event rather than a lookup", () => {
+    const world = emptyWorld();
+    apply(world, delivery("workflow_run", "completed", workflowRun("failure")), {
+      runId: "14244",
+    });
+
+    const entry = world.runs.get("14244")!;
+
+    assert.deepEqual(entry.run, { name: "Bot", runNumber: 14244, trigger: "schedule" });
+    assert.equal(entry.sha, "abc1234");
+    assert.equal(entry.branch, "main");
+  });
+
+  test("keeps the name a lookup already found when the event repeats it", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "completed", checkRun("build", "success")), {
+      runId: "14244",
+      run: { name: "Bot", runNumber: 14244, trigger: "schedule" },
+    });
+
+    apply(world, delivery("workflow_run", "completed", workflowRun("success")), { runId: "14244" });
+
+    assert.deepEqual(world.runs.get("14244")!.run, {
+      name: "Bot",
+      runNumber: 14244,
+      trigger: "schedule",
+    });
   });
 
   test("remembers a push against the commit it landed", () => {

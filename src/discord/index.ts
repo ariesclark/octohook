@@ -8,7 +8,6 @@ import { getDeploymentStatusContent } from "./events/deployment-status";
 import { getCheckRunContent } from "./events/check-run";
 import { getIssueContent } from "./events/issues";
 import { getPullRequestContent } from "./events/pull-request";
-import { getWorkflowRunContent } from "./events/workflow-run";
 import { getStarContent } from "./events/star";
 import { getVulnerabilityAlertContent } from "./events/vulnerability-alert";
 import { getDeleteContent } from "./events/delete";
@@ -44,9 +43,6 @@ async function getWebhookContent(
     case "issues.closed":
     case "issues.reopened":
       return getIssueContent(event, hook);
-
-    case "workflow_run.completed":
-      return getWorkflowRunContent(event, hook);
 
     // `watch.started` duplicates `star.created`.
     case "star.created":
