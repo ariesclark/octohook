@@ -24,7 +24,7 @@ const mergeWindow = 60_000;
 const order = [marks.bad, marks.expired, marks.warning, marks.quiet, marks.good, marks.dropped];
 
 function ranked(run: Run): string {
-  const rank = order.indexOf(boardMark(run.jobs, run.deployments));
+  const rank = order.indexOf(boardMark(run.jobs, run.deployments, run.settled));
 
   return String(rank === -1 ? order.length : rank);
 }
@@ -37,6 +37,7 @@ function toBoard(run: Run): Board & { runId: string } {
   return {
     runId: run.id,
     run: run.run,
+    settled: run.settled,
     title: run.title,
     sha: run.sha,
     branch: run.branch,

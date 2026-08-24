@@ -1,5 +1,5 @@
 import { Ref } from "../../components/ref";
-import { lead, marks } from "../../marks";
+import { checkMark, lead, marks } from "../../marks";
 import { t } from "../../messages.ts";
 import { HookScope, preferredRef } from "../../refs";
 import { WebhookContent } from "../../types";
@@ -15,6 +15,7 @@ export type { BoardDeployment };
 
 export type Board = {
   run?: ResolvedRun;
+  settled?: string | null;
   runId?: string;
   title?: string;
   sha?: string;
@@ -29,7 +30,11 @@ function runUrl(repositoryUrl: string, runId?: string): string | undefined {
   return `${repositoryUrl}/actions/runs/${runId}`;
 }
 
-export function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
+export function boardMark(
+  jobs: BoardJob[],
+  deployments: BoardDeployment[] = [],
+  settled?: string | null,
+) {
   if (
     jobs.some(({ conclusion }) => conclusion === "failure" || conclusion === "timed_out") ||
     deployments.some(({ state }) => state === "failure" || state === "error")
@@ -39,8 +44,11 @@ export function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = [])
   if (jobs.some(({ conclusion }) => !conclusion)) return marks.quiet;
   if (deployments.some(({ state }) => underway.has(state))) return marks.quiet;
 
-  if (jobs.length === 0)
-    return deployments.some(({ state }) => state === "success") ? marks.good : marks.quiet;
+  if (jobs.length === 0) {
+    if (deployments.some(({ state }) => state === "success")) return marks.good;
+
+    return settled ? checkMark(settled) : marks.quiet;
+  }
 
   if (jobs.every(({ conclusion }) => conclusion === "skipped")) return marks.dropped;
 
@@ -56,7 +64,7 @@ export function RunBoard({
   repository: { name: string; full_name?: string; html_url: string };
   hook?: HookScope;
 }): WebhookContent {
-  const { run, branch, jobs, deployments } = board;
+  const { run, branch, jobs, deployments, settled } = board;
 
   const rows = JobRows({ jobs, deployments, repositoryUrl: repository.html_url, sha: board.sha });
   const summary = runSummary(jobs, deployments);
@@ -72,7 +80,7 @@ export function RunBoard({
     <message username="GitHub Actions" avatar_url={actionsAvatarUrl}>
       <text>
         {"-# "}
-        {lead(boardMark(jobs, deployments))}
+        {lead(boardMark(jobs, deployments, settled))}
         <b>{url ? <a href={url}>{title}</a> : title}</b>
         {ref ? (
           <>
@@ -119,7 +127,7 @@ export function CommitBoard({
         return [
           <text>
             {"-# "}
-            {lead(boardMark(entry.jobs, entry.deployments))}
+            {lead(boardMark(entry.jobs, entry.deployments, entry.settled))}
             <b>{url ? <a href={url}>{title}</a> : title}</b>
             {summary ? ` • ${summary}` : ""}
             {rows.length > 0 ? <br /> : ""}
