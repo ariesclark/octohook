@@ -25,7 +25,7 @@ if (import.meta.main) {
   const toFile = process.argv.includes("--file") && filePath ? filePath : undefined;
 
   const transport: Transport = toFile
-    ? fileTransport(toFile, `octohook replay · ${toFile}`)
+    ? fileTransport(toFile, `Octohook replay · ${toFile}`)
     : process.argv.includes("--dry")
       ? dryTransport()
       : discordTransport(secret);

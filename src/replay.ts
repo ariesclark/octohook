@@ -63,7 +63,7 @@ if (import.meta.main) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      username: "octohook",
+      username: "Octohook",
       flags: 1 << 15,
       components: [{ type: 10, content: `# replay` }],
     }),

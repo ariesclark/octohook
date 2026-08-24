@@ -6,10 +6,10 @@ virtual DOM, no reconciler, no dependencies.
 ```tsx
 const line = (
   <b>
-    <a href="https://github.com/ariesclark/octohook">octohook</a>
+    <a href="https://github.com/ariesclark/octohook">Octohook</a>
   </b>
 );
-// "**[octohook](https://github.com/ariesclark/octohook)**"
+// "**[Octohook](https://github.com/ariesclark/octohook)**"
 ```
 
 ## Consuming as intrinsics
