@@ -1,6 +1,6 @@
 # @ariesclark/markdown-jsx
 
-Write Discord-flavored markdown with JSX. Elements evaluate directly to plain strings — no
+Write Discord-flavored markdown with JSX. Elements evaluate directly to plain strings: no
 virtual DOM, no reconciler, no dependencies.
 
 ```tsx
@@ -44,8 +44,8 @@ lines with `<br />` between them just works.
 
 ## Consuming as imports
 
-Every element is also exported as a PascalCase component — plain functions from props to
-strings, usable under any JSX runtime (including React) or with no JSX at all:
+Most elements are also exported as a PascalCase component, a plain function from props to a
+string, usable under any JSX runtime (including React) or with no JSX at all:
 
 ```ts
 import { Bold, Code, Link, Subtext } from "@ariesclark/markdown-jsx";
@@ -69,10 +69,15 @@ Subtext({ children: "variant: classic" }); // "-# variant: classic"
 | `h1`–`h3`   | `H1`–`H3`   | `# …` / `## …` / `### …` |
 | `small`     | `Subtext`   | `-# …`              |
 | `br`        | `LineBreak` | `\n`                |
+| `quote`     | none        | `> …` on every line |
+| `time`      | none        | `<t:1755740000:R>`  |
+
+`quote` and `time` are intrinsics only. `time` takes `at` (a `string`, `number`, or `Date`) and
+an optional `format`, one of Discord's `t T d D f F R`, defaulting to `R`.
 
 ## Caveats
 
 - JSX whitespace rules apply when using intrinsics: spaces between elements across line breaks
-  need an explicit `{" "}`, and newlines are `<br />` — indentation-only lines are trimmed.
+  need an explicit `{" "}`, and newlines are `<br />`. Indentation-only lines are trimmed.
 - Nothing is escaped: children are joined verbatim, so sanitize untrusted input (backticks
   inside `code`, brackets inside link text) yourself.
