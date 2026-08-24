@@ -29,6 +29,8 @@ export type Run = {
   branch?: string;
   run?: ResolvedRun;
   title?: string;
+  startedAt?: string;
+  completedAt?: string;
   jobs: Job[];
   deployments: Deployment[];
   settled?: string | null;
@@ -201,6 +203,8 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       conclusion: string | null;
       head_sha?: string;
       head_branch?: string;
+      run_started_at?: string;
+      updated_at?: string;
     };
 
     const entry = run(world, resolved.runId, at, seen);
@@ -212,6 +216,8 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.repository ??= repositoryIn(payload);
     entry.sha ??= workflow.head_sha;
     entry.branch ??= workflow.head_branch;
+    entry.startedAt ??= workflow.run_started_at;
+    entry.completedAt = workflow.updated_at;
     entry.settled = workflow.conclusion;
 
     return `run settled → ${workflow.conclusion ?? "no verdict"}`;

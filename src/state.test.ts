@@ -34,6 +34,8 @@ function workflowRun(conclusion: string | null, extra: object = {}) {
       conclusion,
       head_sha: "abc1234",
       head_branch: "main",
+      run_started_at: "2026-08-24T01:00:00Z",
+      updated_at: "2026-08-24T01:00:17Z",
       ...extra,
     },
   };
@@ -189,6 +191,8 @@ describe("apply", () => {
     const entry = world.runs.get("14244")!;
 
     assert.deepEqual(entry.run, { name: "Bot", runNumber: 14244, trigger: "schedule" });
+    assert.equal(entry.startedAt, "2026-08-24T01:00:00Z");
+    assert.equal(entry.completedAt, "2026-08-24T01:00:17Z");
     assert.equal(entry.sha, "abc1234");
     assert.equal(entry.branch, "main");
   });

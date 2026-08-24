@@ -189,6 +189,7 @@ function Job({
 export function runSummary(
   jobs: BoardJob[],
   deployments: BoardDeployment[] = [],
+  ran?: { startedAt?: string | null; completedAt?: string | null },
 ): string | undefined {
   const deploying = deployments.filter(({ state }) => underway.has(state)).length;
   const shipping = deploying > 0 ? t("run.deploying", { count: deploying }) : undefined;
@@ -199,7 +200,7 @@ export function runSummary(
   const skipped = jobs.filter(({ conclusion }) => conclusion === "skipped").length;
   const passed = jobs.length - broken - running - skipped;
 
-  return [
+  const counted = [
     broken > 0 ? t("run.failed", { count: broken }) : undefined,
     running > 0 ? t("run.running", { count: running }) : undefined,
     passed > 0 ? t("run.passed", { count: passed }) : undefined,
@@ -208,6 +209,12 @@ export function runSummary(
   ]
     .filter(Boolean)
     .join(", ");
+
+  const duration = checkDuration(ran?.startedAt ?? null, ran?.completedAt ?? null);
+  const took = duration ? t("check.took", { duration }) : undefined;
+
+  if (!took) return counted;
+  return counted ? `${counted} ${took}` : took;
 }
 
 type Rows = {

@@ -88,6 +88,8 @@ const carried: Record<string, string[]> = {
     "workflow_run.conclusion",
     "workflow_run.head_sha",
     "workflow_run.head_branch",
+    "workflow_run.run_started_at",
+    "workflow_run.updated_at",
   ],
   pull_request: [...repository, "pull_request.head.sha"],
 };

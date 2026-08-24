@@ -13,6 +13,8 @@ const payload = {
     conclusion: "success",
     head_sha: "abc1234",
     head_branch: "main",
+    run_started_at: "2026-08-24T01:00:00Z",
+    updated_at: "2026-08-24T01:00:17Z",
     actor: { login: "someone" },
   },
 };
@@ -34,6 +36,8 @@ describe("a workflow run", () => {
       conclusion: "success",
       head_sha: "abc1234",
       head_branch: "main",
+      run_started_at: "2026-08-24T01:00:00Z",
+      updated_at: "2026-08-24T01:00:17Z",
     });
 
     assert.equal(folded.repository.full_name, "o/wiki-bot");

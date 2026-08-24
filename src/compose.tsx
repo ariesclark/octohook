@@ -38,6 +38,8 @@ function toBoard(run: Run): Board & { runId: string } {
     runId: run.id,
     run: run.run,
     settled: run.settled,
+    startedAt: run.startedAt,
+    completedAt: run.completedAt,
     title: run.title,
     sha: run.sha,
     branch: run.branch,
