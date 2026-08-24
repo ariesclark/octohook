@@ -43,23 +43,8 @@ Filters go in the same URL:
 https://octohook.aries.fyi/<secret>?token=<github-token>&exclude=sender.type:Bot
 ```
 
-### Narrowing the token
-
-The token travels in a URL. GitHub shows that URL in full on the repository's webhook page, it is readable by everyone with admin on the repository, and it is copied into whatever pointed the hook here. Assume it leaks, and make the leak cheap.
-
-**Grant read, never write.** The worker only ever sends `GET` requests to `api.github.com`. A token that can write is a token that can rewrite a workflow file the day someone reads the URL.
-
-**Grant Actions and Checks, nothing else.** Those three endpoints are the whole surface. Contents, issues, pull requests, packages, and administration are all unnecessary, and a fine-grained token lets you leave them off. Prefer a fine-grained token over a classic one for that reason: `repo` is read *and* write across every repository you can reach.
-
-**Name the repositories.** Fine-grained tokens take a list. Give it the repositories whose hooks use this token and no others, so the blast radius is a channel's worth of CI rather than an account's worth.
-
-**Use one token per hook,** or per small group of hooks. Then a leaked URL is revoked by deleting one token, and the hooks that share nothing with it keep drawing.
-
-**Set an expiry you'll actually honour.** An expired token doesn't break delivery: lookups return nothing, deliveries still succeed, and boards draw with the run's name, trigger, and annotations missing. Watch for a board that goes quiet in that particular way.
-
-**For an organization, use a machine account** with read access to the repositories in question, rather than a token carrying your own access to everything you can see.
-
-The worker never writes the token to storage. It arrives on each delivery, is held in memory for as long as that isolate lives, and is dropped as soon as a different one arrives (`src/channel.ts`). What the Durable Object persists is the Discord secret, the hook's scope, and the last repository it saw.
+> [!WARNING]
+> The token rides in the webhook URL, and GitHub shows that URL in full to anyone with admin on the repository. Use a fine-grained token, read-only, Actions and Checks alone, listing only the repositories that hook here, and one token per hook so revoking it costs one channel. The worker never stores it: it arrives with each delivery and lives in memory only.
 
 ### What it draws
 
