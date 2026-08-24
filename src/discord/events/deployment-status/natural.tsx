@@ -6,7 +6,6 @@ import { deploymentVerb, namesRef } from "./labels";
 import { DeploymentVariantProps } from "./shared";
 import { t } from "../../messages.ts";
 
-// GitHub Actions app id, matching how workflow runs identify themselves.
 const actionsAvatarUrl = "https://avatars.githubusercontent.com/in/15368";
 
 export function DeploymentNatural({ event, hook }: DeploymentVariantProps): WebhookContent {

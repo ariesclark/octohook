@@ -22,7 +22,6 @@ import { WebhookContent } from "../../types";
 import { displayUsername } from "../push/shared";
 import { pullRequestAction, pullRequestStats, PullRequestEvent } from "./shared";
 
-/** Ordered so structure is settled before anything measures or truncates it. */
 const bodyTransforms = [
   unredirectLinks,
   dropComments,
@@ -36,10 +35,8 @@ const bodyTransforms = [
   dropRules,
 ];
 
-/** The body is news only while the pull request is still being proposed. */
 const bodyActions = new Set(["opened", "reopened", "marked ready for review"]);
 
-/** A backstop under an unusually long opening section; {@link leadingSection} does the cutting. */
 const briefLimit = 1600;
 
 function identity(event: PullRequestEvent) {
@@ -61,7 +58,6 @@ function Reference({ event }: { event: PullRequestEvent }): string {
   );
 }
 
-/** What survived the cut, and whether anything did not — the reader needs a way to the rest. */
 function briefBody(body: string | null | undefined) {
   const source = body?.replaceAll("\r", "").trim();
   if (!source) return { components: [], truncated: false };
@@ -112,11 +108,6 @@ function SeeMore({ event }: { event: PullRequestEvent }) {
   );
 }
 
-/**
- * One phrase per action, not one phrase branching on it: "marked ready for review" and "merged"
- * are different sentences, and a language that reorders one has no reason to reorder the other.
- * An action the catalogue has no sentence for keeps GitHub's own word.
- */
 const headlines: Partial<Record<string, Phrase>> = {
   opened: "pull.opened",
   reopened: "pull.reopened",

@@ -3,7 +3,6 @@ import type { List, Nodes, Parent, RootContent, Table } from "mdast";
 
 import { parseMarkdown } from "./transform.ts";
 
-/** Enough to say what a change is about without becoming the message itself. */
 const defaultLength = 200;
 
 function plain(node: Nodes): string {
@@ -22,7 +21,6 @@ function isDecoration(node: RootContent | { type: string; children?: unknown[] }
   );
 }
 
-/** Each row as its leading cell, then the remaining cells under their column headings. */
 function tableText(table: Table): string {
   const [header, ...rows] = table.children;
   const labels = header?.children.map(plain) ?? [];
@@ -69,14 +67,6 @@ function clip(text: string, characters: number): string {
   return `${(boundary > 0 ? clipped.slice(0, boundary) : clipped).trimEnd()}…`;
 }
 
-/**
- * Bodies open with whatever the author or their tooling put first — a badge, a heading,
- * a template's boilerplate table. The summary is the first real sentence beneath that,
- * as plain text: formatting competes with the message that carries it.
- *
- * A paragraph ending in a colon only promises what comes next, so the block it introduces
- * is folded in behind it; on its own it would describe nothing.
- */
 export function summarise(body: string, characters = defaultLength): string | undefined {
   if (!body.trim()) return undefined;
 
@@ -87,7 +77,6 @@ export function summarise(body: string, characters = defaultLength): string | un
 
   for (const [index, block] of blocks.entries()) {
     if (block.type !== "paragraph") continue;
-    // A badge carries alt text, which reads as prose but says nothing about the change.
     if (block.children.every(isDecoration)) continue;
 
     const text = plain(block);
@@ -99,7 +88,6 @@ export function summarise(body: string, characters = defaultLength): string | un
     return clip(detail ? `${text} ${detail}` : text, characters);
   }
 
-  // No prose at all: the structure is the content.
   for (const block of blocks) {
     const detail = blockText(block);
     if (detail) return clip(detail, characters);

@@ -7,7 +7,6 @@ import { triggerLabel, workflowName } from "../workflow-run/shared";
 import { JobRows, runSummary, underway, type BoardDeployment, type BoardJob } from "./rows";
 import { ResolvedRun } from "./run";
 
-// GitHub Actions app id, matching how workflow runs identify themselves.
 const actionsAvatarUrl = "https://avatars.githubusercontent.com/in/15368";
 
 export type { BoardJob };
@@ -16,30 +15,20 @@ export type { BoardDeployment };
 
 export type Board = {
   run?: ResolvedRun;
-  /** The workflow run's own id, so the line that names it can link to it. */
   runId?: string;
-  /** What to call a set of checks no workflow run claims: the app that posted them. */
   title?: string;
-  /** The commit these checks ran against, so an annotation can link to the line it is about. */
   sha?: string;
   branch?: string;
   jobs: BoardJob[];
   deployments: BoardDeployment[];
 };
 
-/** Only a real workflow run has a page; a set of checks gathered under a suite does not. */
 function runUrl(repositoryUrl: string, runId?: string): string | undefined {
   if (!runId || runId.startsWith("suite-")) return undefined;
 
   return `${repositoryUrl}/actions/runs/${runId}`;
 }
 
-/**
- * A run's mark is the worst thing that happened in it: one failed job makes the run failed,
- * however many passed, and nothing is settled until every job has reported. A run that only
- * deployed is judged on the deployment, since `every` over no jobs is vacuously true and would
- * read as though the whole thing had been skipped.
- */
 export function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
   if (
     jobs.some(({ conclusion }) => conclusion === "failure" || conclusion === "timed_out") ||
@@ -58,11 +47,6 @@ export function boardMark(jobs: BoardJob[], deployments: BoardDeployment[] = [])
   return marks.good;
 }
 
-/**
- * One message per workflow run, rewritten as its jobs report. A run arrives as a dozen separate
- * deliveries over several minutes; posting each one buries the channel, and none of them alone
- * answers the only question worth asking — did this run pass?
- */
 export function RunBoard({
   board,
   repository,
@@ -108,14 +92,6 @@ export function RunBoard({
 
 export type CommitBoardEntry = Board & { runId: string };
 
-/**
- * Every run one commit set off, in one message: the run at the margin, everything it contains
- * stepped in beside a bar. A push and a pull request build the same commit separately and each
- * opens its own run, so they read as two rows rather than as everything happening twice.
- *
- * A run that reported nothing gets no space around it: a rule between two one-line runs
- * separates things that were never together.
- */
 export function CommitBoard({
   entries,
   repository,

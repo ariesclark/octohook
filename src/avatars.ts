@@ -2,10 +2,8 @@ import { PhotonImage, SamplingFilter, resize, watermark } from "@cf-wasm/photon"
 
 const baseSize = 256;
 
-/** How much of a neighbour each avatar covers, buying size in a square the crop cannot take back. */
 const overlap = 0.22;
 
-/** How far each step drops relative to the sideways stride — lower is a flatter zigzag. */
 const drop = 0.62;
 
 type Placement = {
@@ -14,7 +12,6 @@ type Placement = {
   y: number;
 };
 
-/** Sizes a chain of centres so neighbours overlap, then scales the whole path to fill the square. */
 function fitChain(centers: { x: number; y: number }[]): Placement[] {
   const gaps = centers
     .slice(1)
@@ -41,13 +38,7 @@ function fitChain(centers: { x: number; y: number }[]): Placement[] {
   }));
 }
 
-/**
- * Left, then lower right, then lower left: two columns walked alternately down the square.
- * Every step is the same distance as the last, so the chain overlaps evenly.
- */
 function placements(count: number): Placement[] {
-  // Alone, an avatar has no neighbour to be sized against, and filling the canvas would make
-  // one contributor louder than two. It borrows the size a pair would have had.
   if (count < 2) {
     const [pair] = placements(2);
     const size = pair!.size;

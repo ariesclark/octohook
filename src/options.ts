@@ -9,9 +9,7 @@ type Options = {
   exclude?: string;
 };
 
-const defaultOptions: Options = {
-  // exclude: "type:check_run.created OR (type:check_run.completed AND check_run.conclusion:/success|skipped/)",
-};
+const defaultOptions: Options = {};
 
 export function getQuery({ include, exclude }: Options) {
   const { include: defaultInclude, exclude: defaultExclude } = defaultOptions;
@@ -21,8 +19,7 @@ export function getQuery({ include, exclude }: Options) {
 
   const queryString = `${include ? `(${include})` : ""}${include && exclude ? " AND " : ""}${exclude ? `NOT (${exclude})` : ""}`;
 
-  // An empty query parses to an EmptyExpression, which liqe cannot test: it throws
-  // "Expected left to be defined." Filtering on nothing keeps everything.
+  // liqe throws "Expected left to be defined." on the EmptyExpression an empty query parses to.
   const query = queryString ? parse(queryString) : null;
 
   return {
@@ -78,8 +75,7 @@ export const optionsMiddleware = createMiddleware<{
       matches: getMatches({ include, exclude }, event),
     });
 
-  // Absent on older deliveries and on replays; a repository hook is the safer assumption,
-  // since it only ever omits detail the reader can infer.
+  // Absent on older deliveries and on replays.
   const target = req.header("x-github-hook-installation-target-type");
 
   set("event", event);

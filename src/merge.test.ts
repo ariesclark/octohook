@@ -275,7 +275,6 @@ describe("mergeRequests", () => {
 });
 
 describe("order", () => {
-  /** Every line of text a set of requests would post, in the order a reader would meet them. */
   async function lines(requests: Request[]) {
     const parsed = await bodies(requests);
 
@@ -335,7 +334,6 @@ describe("order", () => {
       window: 60_000,
     });
 
-    // Different secrets go to different channels, so compare within each.
     for (const secret of [secretA, secretB])
       assert.deepEqual(await lines(merged.filter(mine(secret))), expected.get(secret));
   });
@@ -453,9 +451,6 @@ describe("mergeAdjacent", () => {
     merges: true,
   });
 
-  // Two stars a moment apart are one thing happening, and read as two messages only because
-  // GitHub sent two deliveries. The queue used to fold them together on the way out; drawing the
-  // channel from a world has to do it here, or it stops happening on every redraw.
   it("says two things in one voice, a moment apart, as one message", () => {
     const merged = mergeAdjacent(
       [drawn("a", "2026-08-21T01:00:00Z", "one"), drawn("b", "2026-08-21T01:00:30Z", "two")],
@@ -466,7 +461,6 @@ describe("mergeAdjacent", () => {
     assert.deepEqual(merged[0]!.content.components, [{ content: "one" }, { content: "two" }]);
   });
 
-  // The first key, so the message keeps the id it was posted under as the group grows.
   it("keeps the key of the message the group started as", () => {
     const merged = mergeAdjacent(
       [drawn("a", "2026-08-21T01:00:00Z", "one"), drawn("b", "2026-08-21T01:00:30Z", "two")],
@@ -498,8 +492,6 @@ describe("mergeAdjacent", () => {
     assert.equal(merged.length, 2);
   });
 
-  // A push grows a board under it as its runs report. Merged into its neighbour it would have to
-  // be torn out again the moment the first check arrived.
   it("never merges a message something can still be drawn under", () => {
     const board = { ...drawn("a", "2026-08-21T01:00:00Z", "one"), merges: false };
     const merged = mergeAdjacent([board, drawn("b", "2026-08-21T01:00:05Z", "two")], 60_000);

@@ -13,15 +13,6 @@ import { fileTransport } from "./render.ts";
 import { resolveFor } from "./resolve.ts";
 import { apply, emptyWorld, type Delivery, type Repository } from "./state.ts";
 
-/**
- * Fold, draw, send, against captured deliveries. The same three steps the worker takes in
- * `channel.ts` — an event only updates the world, the whole channel is drawn from that world
- * afterwards, and delivery works out which of those messages actually changed.
- *
- * What differs is only where the world lives: here it lives for as long as the replay runs, and
- * there it lives in the channel object's storage.
- */
-
 const secret =
   process.env.DISCORD_WEBHOOK ??
   "1538482839069266001/RGCrOCc49q4mA68vZ-ZqsHJm3LI97IWHTeSmA7htXAUi17Q438Z2wOBPsZsMJYMUiIeK";
@@ -54,7 +45,6 @@ if (import.meta.main) {
       const request = await getWebhookRequest(secret, toEvent(delivery), "organization");
       if (!request) return undefined;
 
-      // A message carrying an avatar is multipart, with the message under `payload_json`.
       return request.headers.get("content-type")?.startsWith("application/json")
         ? await request.json()
         : JSON.parse(String((await request.formData()).get("payload_json")));

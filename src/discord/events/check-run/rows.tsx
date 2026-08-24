@@ -4,12 +4,6 @@ import { annotationText, bySeverity, fileUrl, fold } from "./annotations.ts";
 import { meetsAnnotationLevel } from "./run";
 import { checkDuration } from "./shared";
 
-/**
- * Everything a run contains is small text, and the run's own name is the only line at reading
- * size. That size step is the whole of the hierarchy, because nothing else survives: `> > ` draws
- * the same single bar as `> `, two ordinary spaces are not an indent in a proportional font, and
- * `-#` unsets whatever indent is placed on its line anyway.
- */
 const small = "-# ";
 
 export type BoardJob = {
@@ -28,15 +22,8 @@ export type BoardJob = {
   output?: { title?: string; summary?: string };
 };
 
-/** Past this, a check is explaining itself at length and its own page reads better. */
 const longestOutput = 140;
 
-/**
- * What a check said about itself, rather than about the code: a deployed url, a count of alerts,
- * a warning about its own configuration. The summary is GitHub-flavoured markdown, so it goes
- * through the same reader as a pull request body — which also drops the relative links GitHub
- * writes into it, since a link relative to github.com means nothing in a Discord message.
- */
 function outputOf(job: BoardJob): string | undefined {
   const { title, summary } = job.output ?? {};
   const said = summary ? summarise(summary, longestOutput) : undefined;
@@ -52,68 +39,47 @@ export type BoardDeployment = {
   state: string;
   place: string;
   url?: string;
-  /** The job that did the deploying, so a deployment can be shown as that job's doing. */
   jobUrl?: string;
 };
 
 const failed = new Set(["failure", "timed_out", "startup_failure", "action_required"]);
 
-/** A failure earns the room to explain itself; a warning on a passing job does not. */
 const shown = { failed: 5, passed: 2 };
 
 function jobFailed(job: BoardJob): boolean {
   return failed.has(job.conclusion ?? "");
 }
 
-/** A deployment that has announced itself but has nowhere to visit yet. */
 export const underway = new Set(["in_progress", "queued", "pending"]);
 
-/**
- * A deployment nobody can visit yet is not worth a row: it says a job is running, which the job
- * already said. It earns one once it has somewhere to point at, or once it has failed to get
- * there — until then it is counted in the summary instead, so it is still visible.
- */
 export function arrived(deployments: BoardDeployment[]): BoardDeployment[] {
   return deployments.filter(({ state }) => !underway.has(state));
 }
 
-/** What a job deployed, when the status said which job did it. */
 function deploymentsOf(job: BoardJob, deployments: BoardDeployment[] = []) {
   return arrived(deployments).filter(({ jobUrl }) => jobUrl && jobUrl === job.url);
 }
 
-/**
- * Whether a job said anything of its own: a warning about the code, or a word about itself. A
- * job that did is worth drawing however it went — "Preview deployed" is the whole point of the
- * check that says it, and it says it while passing.
- */
 function jobTalks(job: BoardJob): boolean {
   return (
     fold((job.annotations ?? []).filter(meetsAnnotationLevel)).length > 0 || Boolean(outputOf(job))
   );
 }
 
-/** Whether anything is drawn beneath a job, including what it deployed. */
 function jobSpeaks(job: BoardJob, deployments: BoardDeployment[] = []): boolean {
   return jobTalks(job) || deploymentsOf(job, deployments).length > 0;
 }
 
-/** What deployed with no job to hang from: a status that named none, or a job not being shown. */
 function looseDeployments(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
   const urls = new Set(jobs.map(({ url }) => url));
 
   return arrived(deployments).filter(({ jobUrl }) => !jobUrl || !urls.has(jobUrl));
 }
 
-/** Every row after the first opens with a line break; the first would open a gap. */
 function Break({ first }: { first: boolean }) {
   return first ? "" : <br />;
 }
 
-/**
- * What a job said, under the line that named it. A row is a fact — this passed, that failed —
- * and the annotations are the only place the log ever says why.
- */
 function Annotations({
   job,
   repositoryUrl,
@@ -172,7 +138,6 @@ function Deployment({
   first = false,
 }: {
   deployment: BoardDeployment;
-  /** A deployment a job performed belongs under it, where what the job said also goes. */
   under?: boolean;
   first?: boolean;
 }) {
@@ -221,10 +186,6 @@ function Job({
   );
 }
 
-/**
- * How a run is doing, said once. Every style wants this on the line that names the run rather
- * than on a line of its own underneath, where it says the same thing twice.
- */
 export function runSummary(
   jobs: BoardJob[],
   deployments: BoardDeployment[] = [],
@@ -235,7 +196,6 @@ export function runSummary(
   const broken = jobs.filter(jobFailed).length;
   const running = jobs.filter(({ conclusion }) => !conclusion).length;
 
-  // A job nobody ran is not a job that passed, however green the rest of the run looks.
   const skipped = jobs.filter(({ conclusion }) => conclusion === "skipped").length;
   const passed = jobs.length - broken - running - skipped;
 
@@ -252,16 +212,11 @@ export function runSummary(
 
 type Rows = {
   jobs: BoardJob[];
-  /** Drawn alongside the jobs: under the job that performed it, or under the run if none did. */
   deployments?: BoardDeployment[];
   repositoryUrl: string;
   sha?: string;
 };
 
-/**
- * What went wrong, what a check chose to say, and what deployed. How the rest of the run went is
- * on the line above: a run of quiet green jobs draws nothing here at all.
- */
 export function JobRows(rows: Rows) {
   const drawn = rows.jobs.filter((job) => jobFailed(job) || jobSpeaks(job, rows.deployments));
   const loose = looseDeployments(drawn, rows.deployments);

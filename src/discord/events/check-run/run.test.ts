@@ -21,7 +21,6 @@ describe("runReferenceFrom", () => {
     );
   });
 
-  // A check run posted by an app that is not Actions links wherever it likes.
   test("reads nothing from a url with no run in it", () => {
     assert.equal(
       runReferenceFrom("https://github.com/flirtual/flirtual/runs/96317144903"),
@@ -53,7 +52,6 @@ describe("meetsAnnotationLevel", () => {
     assert.equal(meetsAnnotationLevel(at("notice")), false);
   });
 
-  // A level nobody has seen before is more likely news than noise.
   test("keeps a level it does not know", () => {
     assert.equal(meetsAnnotationLevel(at("catastrophe")), true);
   });

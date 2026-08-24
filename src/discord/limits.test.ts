@@ -53,7 +53,6 @@ describe("splitComponents", () => {
     assert.equal(split[1]!.length, 1);
   });
 
-  // Splitting inside a component would tear a quote or a container in half.
   test("keeps a component whole even when it cannot fit alone", () => {
     const huge = line("x".repeat(maximumCharacters + 100));
     const split = splitComponents([line("a"), huge]);
@@ -62,8 +61,6 @@ describe("splitComponents", () => {
     assert.deepEqual(split[1], [huge]);
   });
 
-  // Delivery adds a line to every message after the first, saying what it continues; splitting
-  // to the very limit leaves no room for it and the message comes back rejected.
   test("splits to a smaller budget when asked", () => {
     const line = (content: string): MessageComponent => ({ content });
     const half = "x".repeat(maximumCharacters / 2);

@@ -9,16 +9,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Channel } from "../src/channel.ts";
 import type { Folded } from "../src/foldable.ts";
 
-/**
- * What only a runtime can answer: that a burst becomes one edit, that the world outlives the
- * isolate holding it, and that two deliveries at once both land. `node --test` covers the fold
- * and the drawing; nothing there can fire an alarm, and here the alarm is the delivery.
- */
-
-/**
- * A channel of its own for every test. Storage outlives a test in this pool, and a channel that
- * still holds yesterday's world draws it again the moment the next test asks for a message.
- */
 let nth = 0;
 let channel = "";
 let secret = "";
@@ -35,7 +25,6 @@ let calls: Call[] = [];
 let lookups: Array<{ url: string; authorization: string | null }> = [];
 let posted = 0;
 
-/** The token now rides on the hook's own url rather than being one secret for the whole worker. */
 const token = "github-token";
 
 beforeEach(() => {
@@ -52,8 +41,6 @@ beforeEach(() => {
     if (url.startsWith("https://api.github.com")) {
       lookups.push({ url, authorization: new Headers(init?.headers).get("authorization") });
 
-      // What a check run will not say about itself. Without the trigger a run belongs to no push
-      // and is drawn on its own, which is the tokenless behaviour, not the one under test here.
       if (url.endsWith("/actions/runs/900"))
         return Response.json({ name: "frontend", run_number: 12, event: "push" });
 
@@ -75,11 +62,6 @@ const stub = (name = channel) => env.CHANNEL.getByName(name);
 const deliver = (object: ReturnType<typeof stub>, deliveries: Folded[], to = secret) =>
   object.deliver({ secret: to, hook: "organization", token, deliveries });
 
-/**
- * Retention is measured against when a thing happened, so a fixture with a date written into it
- * is forgotten the moment it is folded. A moment is also a note's identity, so each one is taken
- * once and reused — asking twice gives two different instants and so two different messages.
- */
 const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
 
 function push(at: string, sha: string, received = at): Folded {
@@ -169,14 +151,12 @@ describe("Channel", () => {
     await deliver(object, [push(pushed, "abc1234")]);
     await runDurableObjectAlarm(object);
 
-    // The same delivery again: understood, folded, and identical once drawn.
     await deliver(object, [push(pushed, "abc1234")]);
     await runDurableObjectAlarm(object);
 
     expect(sent()).toHaveLength(1);
   });
 
-  // Hibernation discards everything in memory after a few seconds idle, and on every deploy.
   it("keeps the message it holds across being evicted", async () => {
     const object = stub();
 
@@ -192,8 +172,6 @@ describe("Channel", () => {
     expect(patches()[0]!.url).toContain("/messages/message-1");
   });
 
-  // An input gate opens on every await. A resolve in the middle of a read-modify-write would let
-  // the second of these read the world before the first had written it, and one job would vanish.
   it("loses neither of two deliveries folded at once", async () => {
     const object = stub();
 
@@ -226,8 +204,6 @@ describe("Channel", () => {
     expect(posts()[1]!.url).toContain(`/webhooks/${two}/token`);
   });
 
-  // The token rides on the hook's own url, so two hooks can carry two tokens, and nothing about
-  // it reaches storage — the alarm draws what is already folded and looks nothing up.
   it("looks up a run with the token the delivery carried", async () => {
     await stub().deliver({
       secret,
@@ -260,7 +236,6 @@ describe("Channel", () => {
     });
   });
 
-  // A message the world lets go of stays in the channel; only one it no longer draws comes down.
   it("stops redrawing a commit it has forgotten without taking it down", async () => {
     const object = stub();
 
@@ -278,8 +253,6 @@ describe("Channel", () => {
     });
   });
 
-  // A run is its own key, so a delivery reads and rewrites the one it names rather than the
-  // whole channel — which is what keeps a long window from costing anything per delivery.
   it("keeps every run under a key of its own", async () => {
     const object = stub();
 
@@ -295,8 +268,6 @@ describe("Channel", () => {
     });
   });
 
-  // Ageing the stored run rather than the delivery: the edge stamps arrival, so a delivery is
-  // never born outside the window — a run only leaves it by sitting there.
   it("lets go of a forgotten run's key, not just its message", async () => {
     const object = stub();
 
@@ -325,12 +296,9 @@ describe("Channel", () => {
       expect(keys.filter((key) => key.startsWith("sent:"))).toHaveLength(1);
     });
 
-    // The message the forgotten run drew stays where it is.
     expect(deletes()).toHaveLength(0);
   });
 
-  // An object deployed before runs had keys of their own still holds one `world`. Read as empty
-  // it would draw nothing, and `deliverAll` takes down every message the world no longer draws.
   it("splits a world left behind by the previous shape, rather than losing it", async () => {
     const object = stub();
     const at = secondsAgo(30);
@@ -366,8 +334,6 @@ describe("Channel", () => {
 
     expect(await runDurableObjectAlarm(object)).toBe(true);
 
-    // Both survive the split: the note draws, and the run draws on its own because nothing
-    // resolved a trigger for it. Neither is taken down.
     expect(deletes()).toHaveLength(0);
     expect(posts()).toHaveLength(2);
     expect(posts().map(lines).join("\n")).toContain("pushed abc1234");

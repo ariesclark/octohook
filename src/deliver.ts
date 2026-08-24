@@ -7,30 +7,17 @@ import {
   type MessageComponent,
 } from "./discord/limits.ts";
 
-/**
- * Sending only what changed. A composed message is drawn from the world every time, so most come
- * back identical; rewriting those spends a request to change nothing, against the same rate limit
- * as a real edit. What each message last drew as is kept beside its ids and compared.
- *
- * Where those ids are kept is the caller's business — a replay holds them in a `Map` for as long
- * as it runs, a Durable Object writes them to storage as each one is captured.
- */
-
 export type Content = { components?: unknown[]; [key: string]: unknown };
 
-/** What a composed message holds: the Discord messages it was given, and how it last drew. */
 export type Held = { ids: string[]; drawn: string };
 
 export type Transport = {
   send(content: Content, messageId?: string, at?: string): Promise<string | undefined>;
   remove(messageId: string): Promise<void>;
-  /** Fitting under a ceiling is the transport's business: Discord has one, a file does not. */
   split(components: MessageComponent[], budget?: number): MessageComponent[][];
-  /** Where the webhook posts, so a continuation can point back. A file has nowhere to point. */
   where?(): Promise<{ guild_id?: string; channel_id?: string }>;
 };
 
-/** What `continued from [above](…)` costs: 114 characters measured, with room to spare. */
 export const continuation = 160;
 
 export function discordTransport(secret: string): Transport {
@@ -55,8 +42,6 @@ export function discordTransport(secret: string): Transport {
       return send(content, messageId);
     }
 
-    // A message that will not go is left as it was rather than losing the id that holds it. What
-    // it was measured at goes with the refusal: length is the reason nearly every time.
     if (!response.ok) {
       const components = (content.components ?? []) as MessageComponent[];
 
@@ -88,7 +73,6 @@ export function discordTransport(secret: string): Transport {
   };
 }
 
-/** Everything but the sending, for reading what a replay would do to a channel before it does. */
 export function dryTransport(): Transport {
   let next = 0;
 
@@ -101,14 +85,9 @@ export function dryTransport(): Transport {
   };
 }
 
-/** Told as each message is captured, so ids survive a crash between two sends. */
 export type Capture = (key: string, held: Held | undefined) => void;
 
-/**
- * A composed message becomes as many Discord messages as its size demands, reusing the ids it
- * already holds. A webhook cannot reply — Discord accepts `message_reference` on execute and
- * silently drops it — so a continuation links back to the message it continues.
- */
+/** Discord accepts `message_reference` on a webhook execute and silently drops it. */
 export async function deliverOne(
   key: string,
   content: Content,
@@ -122,9 +101,6 @@ export async function deliverOne(
 
   const components = (content.components ?? []) as MessageComponent[];
 
-  // Every message after the first carries a line saying what it continues. Splitting to the very
-  // limit leaves no room for it, so the message comes back rejected over the length of something
-  // it was never measured with — once a split is needed at all, everything is cut to make room.
   const whole = transport.split(components);
   const parts =
     whole.length > 1 ? transport.split(components, maximumCharacters - continuation) : whole;
@@ -151,8 +127,6 @@ export async function deliverOne(
     const id = await transport.send(body, held?.ids[index], at);
     if (id) ids.push(id);
 
-    // Written before the next send, so a failure halfway through leaves ids to reuse rather than
-    // orphaned messages a webhook can never find again.
     record(key, { ids: [...ids, ...(held?.ids ?? []).slice(ids.length)], drawn: "" });
   }
 
@@ -162,11 +136,6 @@ export async function deliverOne(
   return true;
 }
 
-/**
- * The whole channel, brought to what the world says it should be: every composed message written
- * if it changed, and every message the world no longer draws taken down rather than left saying
- * something that is no longer true.
- */
 export async function deliverAll(
   composed: Composed[],
   transport: Transport,

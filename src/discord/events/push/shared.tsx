@@ -31,7 +31,6 @@ export function displayUsername(username: string): string {
   return username.match(/^(.+)\[bot\]$/)?.[1] ?? username;
 }
 
-/** A commit named as GitHub names it: the first seven characters, linked to itself. */
 function Sha({ repositoryUrl, sha }: { repositoryUrl: string; sha: string }) {
   return (
     <a href={`${repositoryUrl}/commit/${sha}`}>
@@ -62,12 +61,7 @@ export function RefHeadline({
     ""
   );
 
-  /**
-   * A force-push replaces what was on the branch rather than adding to it, so there is no range
-   * to show: `before` is no longer an ancestor of `after`, and the comparison GitHub draws from
-   * it describes something that never happened. Both ends are named instead, which is the only
-   * place the discarded commit is ever written down.
-   */
+  /** After a force-push `before` is no longer an ancestor of `after`, so there is no range. */
   if (event.forced)
     return (
       <b>

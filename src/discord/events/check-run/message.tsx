@@ -5,11 +5,6 @@ import { t } from "../../messages.ts";
 import { HookScope, preferredRef } from "../../refs";
 import { appAvatarUrl, CheckRunEvent, checkDuration, conclusionLabel } from "./shared";
 
-/**
- * {@link CheckRunMarksInlinePlain} without the commit line. A check run rarely arrives alone,
- * and the commit is the one thing every one of them repeats.
- */
-/** One line per check: the mark carries the outcome, the duration rides in the sentence. */
 export function CheckRunMessage({
   event,
   hook,

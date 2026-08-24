@@ -11,7 +11,6 @@ import {
   WorkflowRunEvent,
 } from "./shared";
 
-// GitHub Actions app id, so scheduled runs post under one recognisable identity.
 const actionsAvatarUrl = "https://avatars.githubusercontent.com/in/15368";
 
 export function WorkflowRunNatural({
@@ -30,8 +29,6 @@ export function WorkflowRunNatural({
     ? preferredRef(head_branch, workflow_run.pull_requests ?? undefined)
     : undefined;
 
-  // Reads as a check run does — what ran, how it went, where — since they report the same thing
-  // at different grain.
   return (
     <message username="GitHub Actions" avatar_url={actionsAvatarUrl}>
       <text>

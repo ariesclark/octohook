@@ -4,10 +4,6 @@ import { WebhookContent } from "../../types";
 import { displayUsername } from "../push/shared";
 import { excerpt, issueLabels, IssuesEvent } from "./shared";
 
-/**
- * One phrase per action this is routed for. GitHub adds actions without warning, and one the
- * catalogue has no sentence for keeps its own word rather than being given wording it never had.
- */
 const headlines: Partial<Record<string, Phrase>> = {
   opened: "issue.opened",
   closed: "issue.closed",

@@ -49,8 +49,6 @@ describe("oneLine", () => {
 });
 
 describe("fold", () => {
-  // A rule broken at four places is four places, and a count that spans them points its link
-  // and its line number at whichever came first.
   test("keeps the same complaint at different lines apart", () => {
     const folded = fold([annotation({ startLine: 5 }), annotation({ startLine: 17 })]);
 
@@ -69,7 +67,6 @@ describe("fold", () => {
 });
 
 describe("runnerNoise", () => {
-  // The runner marks every failed job with this; the headline already said the job failed.
   test("drops the runner restating the exit code", () => {
     assert.equal(
       runnerNoise(annotation({ message: "Process completed with exit code 1." })),
@@ -80,7 +77,6 @@ describe("runnerNoise", () => {
 });
 
 describe("bySeverity", () => {
-  // Only so many fit under a job, so the order decides which ones a reader ever sees.
   test("puts what broke above what merely complained", () => {
     const mixed = [
       annotation({ level: "notice", message: "a" }),
@@ -106,7 +102,6 @@ describe("bySeverity", () => {
     );
   });
 
-  // A level the catalogue has never seen is more likely news than noise.
   test("ranks a level it does not know alongside a warning", () => {
     const mixed = [
       annotation({ level: "notice", message: "a" }),
@@ -128,8 +123,6 @@ describe("worthSaying", () => {
     assert.deepEqual(worthSaying([noise, news]), [news]);
   });
 
-  // Dropped when it is all there is, a failing job draws with no reason under it at all — and
-  // the exit code, restated or not, is the only thing anybody has to go on.
   test("keeps the exit code when it is the only thing said", () => {
     assert.deepEqual(worthSaying([noise]), [noise]);
   });

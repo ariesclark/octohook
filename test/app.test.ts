@@ -1,14 +1,6 @@
 import { SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * A hook with no token on its url draws every board with no run names, numbers or triggers — and
- * with no trigger a run belongs to no push, so one commit becomes a message per workflow instead
- * of one board. That is worse than nothing arriving, and quiet about it, so it is refused: a red
- * delivery on the hook's own page is the only place anybody would see the problem.
- */
-
-/** Storage outlives a test in this pool, and the revision counts folds for the life of a channel. */
 let nth = 0;
 let channel = "";
 

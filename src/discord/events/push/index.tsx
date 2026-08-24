@@ -10,14 +10,12 @@ export async function getPushContent(
 ): Promise<WebhookContent | null> {
   const branch = event.ref.replace(/^refs\/(heads|tags)\//, "");
 
-  // A removed ref arrives as its own `delete` event, which says whether it was a branch or a tag.
+  // A removed ref also arrives as its own `delete` event.
   if (event.deleted) return null;
 
   if (event.ref.startsWith("refs/tags/"))
     return <TagPushed event={event} branch={branch} hook={hook} />;
 
-  // A branch cut from a commit that already exists carries none of its own, and the `create`
-  // event that also announces it is dropped — for every other branch, this push says more.
   if (event.commits.length === 0)
     return event.created ? <BranchCreated event={event} branch={branch} hook={hook} /> : null;
 

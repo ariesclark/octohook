@@ -34,8 +34,6 @@ describe("checkMark", () => {
     assert.equal(checkMark("something-new"), marks.quiet);
   });
 
-  // Orange is a warning now, and nothing in flight wears it: a check that stopped to ask a
-  // person is a warning, where a check that is simply still going is not.
   it("marks a check waiting on a person as a warning", () => {
     assert.equal(checkMark("action_required"), marks.warning);
     assert.notEqual(checkMark("action_required"), marks.quiet);

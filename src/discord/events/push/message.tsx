@@ -10,13 +10,8 @@ import {
   RefHeadline,
 } from "./shared";
 
-/**
- * Faces past this stretch the chain into something that no longer reads as a huddle; who else
- * contributed is in the commit list regardless.
- */
 const thumbnailAuthors = 3;
 
-/** Rows of text the thumbnail stands as tall as, and where the narrowed column wraps. */
 const sectionRows = 3;
 const narrowWidth = 62;
 
@@ -28,7 +23,6 @@ export async function PushMessage({
   const sender = pushSender(event);
   const identity = { username: displayUsername(sender.login), avatar_url: sender.avatar_url };
 
-  // Ranked, so the faces that survive the cap are the ones who did the most of the work.
   const others = authorsByContribution(event.commits).filter(
     (username) => username !== sender.login,
   );
@@ -40,8 +34,7 @@ export async function PushMessage({
     <CommitLine commit={commit} showAuthor={showAuthor} omitAuthor={event.sender?.login} />
   ));
 
-  // Discord puts a margin between sibling components, so joining the lines into one keeps
-  // them reading as a block.
+  // Discord puts a margin between sibling components.
   const group = (items: string[]): string[] =>
     items.length > 0 ? [<text>{items.join("\n")}</text>] : [];
 

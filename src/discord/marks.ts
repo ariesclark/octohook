@@ -1,38 +1,19 @@
-/**
- * One vocabulary for every event. A reader learns six marks once, and a blue diamond means
- * the same thing whether it arrived from a check run, a deployment or a pull request.
- *
- * Shortcodes rather than literal emoji: Discord renders these at text size, so a line of them
- * stays a line of text instead of a row of pictures.
- */
+// Discord renders a shortcode at text size, where a literal emoji is a picture.
 export const marks = {
-  /** It ran, and it worked: a check passed, a deployment went live, a pull request merged. */
   good: ":small_blue_diamond:",
-
-  /** It ran, and it did not work. */
   bad: ":small_red_triangle:",
-
-  /** It ran out of time rather than reaching a verdict. */
   expired: ":small_red_triangle_down:",
-
-  /** It ran, and something about it wants a second look — but the run is not lost. */
   warning: ":small_orange_diamond:",
-
-  /** Deliberately not done: skipped, cancelled, closed unmerged, torn down. */
   dropped: ":black_small_square:",
-
-  /** Nothing to report, yet or ever: still running, neutral, stale, still a draft. */
   quiet: ":white_small_square:",
 } as const;
 
 export type Mark = (typeof marks)[keyof typeof marks];
 
-/** A mark and the space that follows it, so no caller has to remember the space. */
 export function lead(mark: Mark): string {
   return `${mark} `;
 }
 
-/** Shared by check runs and workflow runs, which report the same conclusions. */
 const conclusions: Record<string, Mark> = {
   success: marks.good,
   failure: marks.bad,
@@ -74,10 +55,6 @@ export function issueMark(action: string, reason: string | null | undefined): Ma
   return marks.quiet;
 }
 
-/**
- * Severity is its own scale and must never borrow {@link marks.good} — the least dangerous
- * vulnerability is still a vulnerability, and a blue diamond would read as "all clear".
- */
 const severities: Record<string, Mark> = {
   critical: marks.bad,
   high: marks.bad,

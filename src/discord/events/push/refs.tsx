@@ -14,11 +14,7 @@ function RefMessage({ event, children }: { event: PushEvent; children?: unknown 
   );
 }
 
-/**
- * A branch made from a commit that already exists arrives as a push with nothing in it, and
- * GitHub's own `create` event is dropped because it duplicates every other branch push. Without
- * this the branch appears from nowhere.
- */
+/** A branch made from an existing commit arrives as a push with no commits in it. */
 export function BranchCreated({ event, branch, hook }: PushVariantProps): WebhookContent {
   return (
     <RefMessage event={event}>

@@ -15,7 +15,6 @@ import { getDeleteContent } from "./events/delete";
 
 export type { WebhookContent, WebhookFile } from "./types";
 
-/** `null` drops the event: anything without a renderer below is intentionally not posted. */
 export async function getWebhookRequest(
   secret: string,
   event: GithubEvent,
@@ -38,21 +37,18 @@ async function getWebhookContent(
     case "deployment_status.created":
       return getDeploymentStatusContent(event, hook);
 
-    // check_run.created / .rerequested / .requested_action are progress noise.
     case "check_run.completed":
       return getCheckRunContent(event, hook);
 
-    // issues.edited and the label/assign/pin actions are noise.
     case "issues.opened":
     case "issues.closed":
     case "issues.reopened":
       return getIssueContent(event, hook);
 
-    // workflow_job and the requested/in_progress runs are progress noise.
     case "workflow_run.completed":
       return getWorkflowRunContent(event, hook);
 
-    // `watch.started` duplicates `star.created`, so only stars are posted.
+    // `watch.started` duplicates `star.created`.
     case "star.created":
     case "star.deleted":
       return getStarContent(event, hook);
@@ -69,7 +65,7 @@ async function getWebhookContent(
     case "pull_request.synchronize":
       return getPullRequestContent(event, hook);
 
-    // Renovate rewrites a body on every rebase; only a rename or a new target is news.
+    // Renovate rewrites a body on every rebase.
     case "pull_request.edited":
       return event.changes?.title || event.changes?.base
         ? getPullRequestContent(event, hook)

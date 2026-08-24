@@ -28,7 +28,6 @@ export function runConclusionLabel(conclusion: string | null): string {
   return conclusionLabels[conclusion] ?? conclusion;
 }
 
-/** GitHub calls the trigger `event`; "schedule" and "workflow_dispatch" read better spelled out. */
 export function triggerLabel(trigger: string): string {
   return tOf("trigger", trigger, trigger);
 }

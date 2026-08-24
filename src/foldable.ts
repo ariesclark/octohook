@@ -1,16 +1,6 @@
 import type { Delivery } from "./state.ts";
 
-/**
- * Which events gather into a live message, and what of an event survives the trip to the channel
- * that shows it. Only the fields the fold and the lookups in front of it read are carried: a raw
- * `push` is mostly a list of commits nothing here looks at, and the trimmed payload is also what
- * ends up written to the channel's storage.
- *
- * Anything a reader sees was rendered before the trip and travels as `content`.
- */
-
 export type Folded = Delivery & {
-  /** Rendered at the edge for an event that says one thing and is done: a push, a star. */
   content?: unknown;
 };
 
@@ -25,11 +15,6 @@ function at(payload: Payload, path: string): unknown {
     );
 }
 
-/**
- * Where each event keeps the commit it is about, and so which events are a commit's news at all.
- * An event that names no commit — a star, an issue, a deleted branch — has nothing to gather
- * with and nothing to be edited into later.
- */
 const commits: Record<string, string> = {
   check_run: "check_run.head_sha",
   check_suite: "check_suite.head_sha",
@@ -51,11 +36,6 @@ export function shaOf(name: string, payload: Payload): string | undefined {
   return typeof sha === "string" && sha.length > 0 ? sha : undefined;
 }
 
-/**
- * The fields `apply` folds, `referenceFor` looks up, and a board draws its links from — nothing
- * else. A check run's `output` is the one place with no ceiling, since a tool may put its whole
- * report in `text`, so it is cut to the two fields a job row reads.
- */
 const repository = ["repository.name", "repository.full_name", "repository.html_url"];
 
 const carried: Record<string, string[]> = {
@@ -104,8 +84,6 @@ const carried: Record<string, string[]> = {
 export function foldablePayload(name: string, payload: Payload): Payload {
   const trimmed: Payload = {};
 
-  // An event that gathers into nothing still says which repository it is about, and a note drawn
-  // months from now builds its links from that and nothing else.
   for (const path of carried[name] ?? repository) {
     const value = at(payload, path);
     if (value === undefined) continue;

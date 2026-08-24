@@ -8,10 +8,7 @@ import { displayUsername } from "../push/shared";
 
 export type DeleteEvent = Extract<GithubEvent, { type: "delete" }>;
 
-/**
- * GitHub announces a removed branch twice: once as this, and once as a push whose `after` is
- * all zeroes. This one is the clearer of the pair — it names whether a branch or a tag went.
- */
+/** GitHub announces a removed branch twice: as this, and as a push whose `after` is all zeroes. */
 export function getDeleteContent(event: DeleteEvent, hook: HookScope): WebhookContent {
   const { ref, ref_type: type, repository, sender } = event;
 

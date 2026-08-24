@@ -1,15 +1,8 @@
-/**
- * A check run says nothing about the workflow that ran it — no name, no number, no trigger.
- * The only handle is the run id inside its `details_url`, which the API can turn back into all
- * three. Everything here is optional: without a token the log renders exactly as it does now.
- */
-
 export type RunReference = {
   repository: string;
   runId: string;
 };
 
-/** `https://github.com/<owner>/<repo>/actions/runs/<id>/job/<id>` and nothing else. */
 export function runReferenceFrom(detailsUrl: string): RunReference | undefined {
   let pathname: string;
 
@@ -26,7 +19,6 @@ export function runReferenceFrom(detailsUrl: string): RunReference | undefined {
 }
 
 export type ResolvedRun = {
-  /** As the API gives it: a path when the workflow was never named. */
   name: string;
   runNumber: number;
   trigger: string;
@@ -46,12 +38,7 @@ export type Github = {
   resolveAnnotations(repository: string, checkRunId: number): Promise<Annotation[]>;
 };
 
-/**
- * A token and the answers it has already fetched, together. Held by whoever is doing the
- * resolving rather than by this module: a Durable Object shares its isolate with every other
- * instance of its class, so a token at module scope is one object's credentials in another's
- * hands. Losing the cache to hibernation costs a request; the alternative costs correctness.
- */
+/** A Durable Object shares its isolate with every other instance of its class. */
 export function createGithub(token?: string): Github {
   const runs = new Map<string, Promise<ResolvedRun | undefined>>();
   const suites = new Map<string, Promise<RunReference | undefined>>();
@@ -72,7 +59,6 @@ export function createGithub(token?: string): Github {
   }
 
   return {
-    /** One request per run, however many of its jobs report in. */
     resolveRun(reference: RunReference): Promise<ResolvedRun | undefined> {
       const key = `${reference.repository}/${reference.runId}`;
       const pending = runs.get(key);
@@ -88,11 +74,7 @@ export function createGithub(token?: string): Github {
       return request;
     },
 
-    /**
-     * A check created through the Checks API rather than by a job carries the short `/runs/<id>`
-     * url, which names no run — but it still belongs to a check suite, and a suite belongs to one
-     * workflow run. This is the way back for a check that would otherwise stand alone.
-     */
+    /** A check created through the Checks API carries the short `/runs/<id>` url, naming no run. */
     runReferenceFromSuite(repository: string, suiteId: number): Promise<RunReference | undefined> {
       const key = `${repository}/${suiteId}`;
       const pending = suites.get(key);
@@ -131,25 +113,16 @@ export function createGithub(token?: string): Github {
   };
 }
 
-/**
- * GitHub's three annotation levels, in the order a reader cares about them. A notice is a
- * tool talking about itself — a version, a count — so the floor sits above it.
- */
 const levels: Record<string, number> = {
   notice: 0,
   warning: 1,
   failure: 2,
 };
 
-/** A level this does not know ranks with a warning: more likely news than noise. */
 export function severity(level: string): number {
   return levels[level] ?? levels.warning!;
 }
 
-/**
- * A notice is a tool talking about itself — a version, a count — and never what a reader came
- * for. A level this does not know is more likely news than noise, so it is never the one dropped.
- */
 export function meetsAnnotationLevel({ level }: Annotation): boolean {
   return severity(level) >= levels.warning!;
 }

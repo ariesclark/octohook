@@ -2,12 +2,6 @@ import { writeFileSync } from "node:fs";
 
 import type { MessageComponent } from "./discord/limits.ts";
 
-/**
- * A channel as a file. Every message the replay would send becomes a block, every edit rewrites
- * the block in place, and the whole file is written again on each change — so a markdown preview
- * open beside it shows the same thing a reader in Discord would see, as it happens.
- */
-
 export type Message = {
   id: string;
   username?: string;
@@ -16,7 +10,6 @@ export type Message = {
   at: string;
 };
 
-/** Discord renders these at text size; a markdown preview needs the real thing. */
 const marks: Record<string, string> = {
   ":small_blue_diamond:": "🔹",
   ":small_red_triangle:": "🔺",
@@ -49,11 +42,10 @@ function toMarkdown(components: MessageComponent[]): string {
       );
 
       // Discord indents a line inside a quote with spaces and keeps them; markdown throws them
-      // away, so what a reader saw as nested arrived here flat. A quote inside a quote says the
-      // same thing in the language this file is written in.
+      // away.
       const nested = marked.replace(/^> {2,}/, "> > ");
 
-      // `-# ` is Discord's small text and means nothing to markdown, inside a quote or out.
+      // `-# ` is Discord's small text and means nothing to markdown.
       if (nested.startsWith("-# ")) return `_${nested.slice(3)}_`;
       if (nested.startsWith("> -# ")) return `> _${nested.slice(5)}_`;
       if (nested.startsWith("> > -# ")) return `> > _${nested.slice(7)}_`;
@@ -61,9 +53,8 @@ function toMarkdown(components: MessageComponent[]): string {
       return nested;
     });
 
-  // Discord breaks a line on every newline; markdown folds them into one paragraph unless each
-  // line ends in two spaces. A quote also swallows the line after it, so it needs a blank line
-  // to close before anything that is not part of it.
+  // Markdown folds newlines into one paragraph unless each line ends in two spaces, and a quote
+  // swallows the line after it.
   const spaced: string[] = [];
 
   for (const [index, line] of rendered.entries()) {
@@ -96,7 +87,6 @@ export function fileTransport(path: string, title: string) {
   write();
 
   return {
-    /** A file has no ceiling to fit under, so a message is never cut in two to reach it. */
     split: (components: MessageComponent[], _budget?: number) =>
       components.length > 0 ? [components] : [],
 

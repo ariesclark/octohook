@@ -30,7 +30,6 @@ const prefixed = {
   small: "-# ",
 } as const;
 
-/** Discord timestamp styles: short/long time, short/long date, full, relative. */
 export type TimeFormat = "t" | "T" | "d" | "D" | "f" | "F" | "R";
 
 export const markdownElements: Record<string, (props: never) => string> = {

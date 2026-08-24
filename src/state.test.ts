@@ -49,7 +49,6 @@ describe("apply", () => {
     assert.equal(world.runs.get("7")!.jobs[0]!.conclusion, "success");
   });
 
-  // GitHub delivers `created` after `completed` for some jobs; a verdict must survive it.
   test("never takes back a verdict a later event does not have", () => {
     const world = emptyWorld();
     apply(world, delivery("check_run", "completed", checkRun("build", "failure")), { runId: "7" });
@@ -93,8 +92,6 @@ describe("apply", () => {
     assert.equal(deployments[0]!.place, "abc1234.example.dev");
   });
 
-  // `target_url` is a deprecated alias of `log_url`: both name the job, neither names a host.
-  // Taken as somewhere to visit it sends a reader back to the job the row already sits under.
   test("gives a deployment nowhere to visit until a host says so", () => {
     const world = emptyWorld();
     const job = "https://github.com/o/r/actions/runs/1/job/2";
@@ -160,8 +157,6 @@ describe("apply", () => {
     assert.equal(world.notes[0]!.sha, "abc1234");
   });
 
-  // GitHub redelivers, by hand from the hook page and by itself after a bad response. A second
-  // copy of a note is a second message saying the same thing, for as long as the channel holds it.
   test("remembers a redelivered note once", () => {
     const world = emptyWorld();
     const again = () =>
@@ -203,8 +198,6 @@ describe("apply, across repositories", () => {
     html_url: "https://g/f/f",
   };
 
-  // One channel can be fed by an organisation hook, so the boards in it are not all from one
-  // repository — and every link a board draws is built from that repository's url.
   test("remembers which repository a run is from", () => {
     const world = emptyWorld();
     apply(world, delivery("check_run", "created", { ...checkRun("build", null), repository }), {
@@ -270,7 +263,6 @@ describe("forget", () => {
     assert.equal(built.runs.has("old-run"), true);
   });
 
-  // A note is what its runs are drawn under; forgetting it first would strand them.
   test("keeps a note a surviving run still belongs to", () => {
     const built = emptyWorld();
 
@@ -286,8 +278,6 @@ describe("forget", () => {
     assert.equal(built.notes.length, 1);
   });
 
-  // GitHub redelivers by hand from the hook page, hours or days after the fact. Measured against
-  // when the thing happened, such a delivery is folded and forgotten in the same breath.
   test("keeps what happened long ago but only arrived now", () => {
     const built = emptyWorld();
     const arrived = at("09");
@@ -348,7 +338,6 @@ describe("ownerOf", () => {
     assert.equal(ownerOf(notes, run("pull_request"))!.key, "b");
   });
 
-  // Order of arrival must not decide it: a push often lands after the pull request it updated.
   test("does not let arrival order move a run to the wrong note", () => {
     const reversed = [note("b", "pull_request", "abc"), note("a", "push", "abc")];
 
@@ -356,7 +345,6 @@ describe("ownerOf", () => {
     assert.equal(ownerOf(reversed, run("pull_request"))!.key, "b");
   });
 
-  // Without this a scheduled run gathers under whatever sits at the head of the branch.
   test("gives a run nothing in the channel asked for to nobody", () => {
     assert.equal(ownerOf(notes, run("schedule")), undefined);
     assert.equal(ownerOf(notes, run("issues")), undefined);

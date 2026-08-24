@@ -79,10 +79,6 @@ export type MergedRequest = {
   at?: number;
 };
 
-/**
- * Messages to one webhook must keep their batch order, so a group only accepts a
- * message when it is still the newest entry for that webhook.
- */
 function channelOf(url: string): string {
   const { origin, pathname } = new URL(url);
   return origin + pathname.replace(/\/github$/, "");
@@ -96,9 +92,7 @@ type Group = {
 };
 
 export type MergeOptions = {
-  /** Event times, parallel to `requests`; without them messages merge regardless of age. */
   timestamps?: number[];
-  /** How far apart two events may be and still share a message. */
   window?: number;
 };
 
@@ -151,12 +145,10 @@ export async function mergeRequestsWithSources(
   });
 }
 
-/** A drawn message, as much of one as merging needs to know. */
 export type Drawn = {
   key: string;
   at: string;
   content: unknown;
-  /** False for anything that can still grow: a board is torn apart by being folded into a run. */
   merges?: boolean;
 };
 
@@ -169,14 +161,6 @@ function voiceOf(content: unknown): string {
   return JSON.stringify([username, avatar]);
 }
 
-/**
- * Two things said in the same voice a moment apart are one thing happening, and read as two
- * messages only because GitHub sent two deliveries. The group keeps the key of the message it
- * started as, so it holds the id it was first posted under however many more join it.
- *
- * Only what is finished merges. A push grows a board beneath it as its checks report, and one
- * folded into a neighbour would have to be torn back out the moment the first of them arrived.
- */
 export function mergeAdjacent<T extends Drawn>(entries: T[], window: number): T[] {
   const merged: T[] = [];
 

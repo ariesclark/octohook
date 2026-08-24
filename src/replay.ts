@@ -25,7 +25,6 @@ export function toEvent({ event, action, payload }: Delivery): GithubEvent {
   return { ...payload, type: `${event}${action ? `.${action}` : ""}` } as GithubEvent;
 }
 
-/** Every line Discord would show, in order, so a variant can be read in a terminal. */
 function lines(components: Component[]): string[] {
   return components.flatMap((component) => [
     ...(component.content ? [component.content] : []),
@@ -34,7 +33,6 @@ function lines(components: Component[]): string[] {
   ]);
 }
 
-/** The channel a replay lands in, since it is rarely the one the worker posts to. */
 const secret =
   process.env.DISCORD_WEBHOOK ??
   "1538482839069266001/RGCrOCc49q4mA68vZ-ZqsHJm3LI97IWHTeSmA7htXAUi17Q438Z2wOBPsZsMJYMUiIeK";
@@ -71,8 +69,7 @@ if (import.meta.main) {
     }),
   });
 
-  // `wait=true` so Discord returns the message it made: a replay in the wrong channel is only
-  // undoable while its ids are still in hand, and a webhook cannot ask a channel what it holds.
+  // A webhook cannot ask a channel what it holds, so `wait=true` is the only way to its ids.
   for (const request of [heading, ...merged]) {
     const url = new URL(request.url);
     url.searchParams.set("wait", "true");

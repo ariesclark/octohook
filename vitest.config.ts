@@ -4,18 +4,9 @@ import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 /**
- * The Durable Object tests, and only those. Everything pure runs under `node --test`, which is
- * faster and needs no runtime; what is left is the part that cannot be tested without one —
- * storage that survives hibernation, and an alarm that is the whole delivery mechanism.
- */
-
-/**
- * `discord-api-types`' module build is a shim over its CommonJS one — `import mod from "./v10.js"`
- * and then `export const X = mod.X` for every name. That default import lands as `undefined` in
- * this pool, so every name it re-exports is undefined too, and the JSX runtime meets
- * `Object.entries(undefined)` before a single test runs. The CommonJS file imports correctly;
- * this points at it. Rewriting the pool's own resolve conditions instead breaks `photon`, which
- * asks for `workerd` and would be handed `node`.
+ * `discord-api-types`' module build is a shim whose default import lands as `undefined` in this
+ * pool, so the CommonJS file is resolved instead. Rewriting the pool's own resolve conditions
+ * breaks `photon`, which asks for `workerd` and would be handed `node`.
  */
 const commonBuild = {
   name: "discord-api-types-common-build",

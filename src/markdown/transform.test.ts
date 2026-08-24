@@ -643,7 +643,6 @@ describe("intraword underscores", () => {
 
 describe("escapes Discord never needs", () => {
   it("keeps an ampersand in a query string", () => {
-    // A bare url prints as an autolink, which also stops Discord unfurling it.
     assert.equal(
       transformMarkdown("https://example.com/x?a=1&b=2 and &c", []),
       "<https://example.com/x?a=1&b=2> and &c",

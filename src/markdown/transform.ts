@@ -5,10 +5,6 @@ import { gfm } from "micromark-extension-gfm";
 import { decodeNamedCharacterReference } from "decode-named-character-reference";
 import type { ListItem, Nodes, Parent, PhrasingContent, RootContent, Table } from "mdast";
 
-/**
- * Discord renders a subset of GitHub's markdown, so a pull request body has to be
- * rewritten rather than escaped. Each transform edits the parsed tree in place.
- */
 export type Transform = (tree: Nodes) => void;
 
 export function parseMarkdown(body: string): Nodes {
@@ -18,10 +14,6 @@ export function parseMarkdown(body: string): Nodes {
   });
 }
 
-/**
- * Discord's subtext has no markdown equivalent, so it is a node of our own with a
- * printer handler rather than a string smuggled through an `html` node.
- */
 export interface Subtext extends Parent {
   type: "subtext";
   children: PhrasingContent[];
@@ -37,14 +29,9 @@ export function printMarkdown(tree: Nodes): string {
   return (
     toMarkdown(tree, {
       extensions: [gfmToMarkdown()],
-      // Discord has no thematic breaks or `*` emphasis nesting rules to lean on:
-      // a printed `***` reads as an opening bold marker, and `*` bullets can pair
-      // with one another, so both default markers are replaced with dashes.
+      // Discord reads a printed `***` as an opening bold marker, and pairs `*` bullets.
       bullet: "-",
       rule: "-",
-      // Markdown puts a blank line between every block, which Discord renders as a real
-      // gap. Only prose earns one: a heading belongs against what it introduces, list
-      // items belong together, and inside a quote a blank line shows as a lone `>`.
       join: [
         (left, right, parent) => {
           if (parent.type === "blockquote") return 0;
@@ -56,16 +43,14 @@ export function printMarkdown(tree: Nodes): string {
         },
       ],
       handlers: {
-        // A newline is a line break in Discord; markdown's trailing backslash would show.
         break: () => "\n",
         subtext: (node, _parent, state, info) =>
           `-# ${state.containerPhrasing(node as Subtext, info)}`,
       },
     })
       .trimEnd()
-      // The printer escapes for CommonMark and GFM, but Discord parses neither entities
-      // nor single tildes, and ignores an underscore inside a word — so those backslashes
-      // would be visible for nothing. `<` keeps its escape: unescaping could form a mention.
+      // Discord parses neither entities nor single tildes; `<` keeps its escape, since
+      // unescaping could form a mention.
       .replaceAll(/(?<=\w)\\_(?=\w)/g, "_")
       .replaceAll("\\&", "&")
       .replaceAll(/\\~(?!~)/g, "~")
@@ -80,10 +65,6 @@ function omittedNote(count: number): Subtext {
   return subtext(`… ${count} more block${count === 1 ? "" : "s"}`);
 }
 
-/**
- * Comments are addressed to whoever edits the source: templates leave instructions in
- * them, and tools hide state. Discord shows them verbatim.
- */
 export function dropComments(tree: Nodes): void {
   visitParents(tree, (parent) => {
     const kept: RootContent[] = [];
@@ -102,10 +83,6 @@ export function dropComments(tree: Nodes): void {
   });
 }
 
-/**
- * Raw html keeps its character references, since markdown never parses inside it —
- * so `&#8203;`, which GitHub uses to stop autolinking, reaches Discord as literal text.
- */
 export function decodeEntities(tree: Nodes): void {
   visitParents(tree, (parent) => {
     for (const child of parent.children as RootContent[]) {
@@ -124,10 +101,6 @@ export function decodeEntities(tree: Nodes): void {
   });
 }
 
-/**
- * GitHub renders `> [!NOTE]` as a titled callout. Discord has no such thing, and the
- * printer escapes the bracket into `\[!NOTE]`, so the marker becomes a bold heading.
- */
 const alertLabels: Record<string, string> = {
   NOTE: "Note",
   TIP: "Tip",
@@ -150,7 +123,6 @@ export function labelAlerts(tree: Nodes): void {
       const label = alertLabels[/^\[!([A-Z]+)]\s*/.exec(marker.value)?.[1] ?? ""];
       if (!label) continue;
 
-      // Only the marker and its trailing spaces go; the line break belongs to the body.
       const rest = marker.value.replace(/^\[![A-Z]+][ \t]*/, "");
       first.children = [
         { type: "strong", children: [{ type: "text", value: label }] },
@@ -161,10 +133,6 @@ export function labelAlerts(tree: Nodes): void {
   });
 }
 
-/**
- * GFM checkboxes render as literal `[x]` in Discord, so the state becomes a character
- * that carries the same meaning at a glance.
- */
 const taskMarks = { true: "✅", false: "⬜" } as const;
 
 export function taskLists(tree: Nodes): void {
@@ -186,10 +154,6 @@ export function taskLists(tree: Nodes): void {
   });
 }
 
-/**
- * Markdown has no way to break a line inside a table cell, so bodies use `<br>`. Discord
- * prints the tag verbatim, while a real break node prints as the newline it stands for.
- */
 export function lineBreaks(tree: Nodes): void {
   visitParents(tree, (parent) => {
     parent.children = parent.children.map((child) => {
@@ -198,7 +162,6 @@ export function lineBreaks(tree: Nodes): void {
       return { type: "break" } as RootContent;
     }) as typeof parent.children;
 
-    // The spaces that surrounded the tag would otherwise pad the new line.
     for (const [index, child] of parent.children.entries()) {
       if (child.type !== "break") continue;
 
@@ -211,10 +174,6 @@ export function lineBreaks(tree: Nodes): void {
   });
 }
 
-/**
- * GitHub's `<sub>` and `<sup>` are how authors write an aside in a body. Discord has no
- * subscript, but it does have subtext, which is what the markup was reaching for.
- */
 const smallTags = new Set(["sub", "sup"]);
 
 export function smallText(tree: Nodes): void {
@@ -235,7 +194,6 @@ export function smallText(tree: Nodes): void {
   });
 }
 
-/** Discord renders no horizontal rules, so a break is only a source of stray markers. */
 export function dropRules(tree: Nodes): void {
   visitParents(tree, (parent) => {
     parent.children = parent.children.filter(
@@ -258,12 +216,10 @@ function visitParents(node: Nodes, visit: (parent: Parent) => void): void {
   for (const child of (node as Parent).children) visitParents(child as Nodes, visit);
 }
 
-/** Column headers become plain labels, so their inline markup is printed out flat. */
 function cellText(cell: { children: PhrasingContent[] }): string {
   return printMarkdown({ type: "paragraph", children: cell.children } as Nodes).trim();
 }
 
-/** Discord renders `#` through `###`; deeper levels print their hashes literally. */
 const deepestRenderedHeading = 3;
 
 export function boldDeepHeadings(tree: Nodes): void {
@@ -279,10 +235,6 @@ export function boldDeepHeadings(tree: Nodes): void {
   });
 }
 
-/**
- * Markdown keeps raw HTML as opaque blocks, so an opener and its closer are separate
- * nodes: dropping the tail can strand `<details>` without its `</details>`.
- */
 function closeDanglingTags(blocks: RootContent[]): RootContent[] {
   const open: string[] = [];
 
@@ -302,11 +254,6 @@ function closeDanglingTags(blocks: RootContent[]): RootContent[] {
   return open.reverse().map((name) => ({ type: "html", value: `</${name}>` }) as RootContent);
 }
 
-/**
- * Discord caps a message, and slicing printed markdown cuts mid-sentence and strands
- * unclosed tags. Whole blocks are dropped from the end instead, and the count of what
- * went missing takes the place of the last one that fit.
- */
 export function limit(characters: number): Transform {
   return (tree) => {
     if (!("children" in tree)) return;
@@ -342,10 +289,6 @@ export function limit(characters: number): Transform {
   };
 }
 
-/**
- * GitHub serves `redirect.github.com` as an interstitial so quoted URLs do not create
- * cross-reference backlinks. Discord readers just want the real page.
- */
 export function unredirectLinks(tree: Nodes): void {
   visitParents(tree, (parent) => {
     for (const child of parent.children as RootContent[]) {
@@ -359,8 +302,6 @@ export function unredirectLinks(tree: Nodes): void {
       url.hostname = "github.com";
       child.url = url.href;
 
-      // An autolink repeats its target as the label; leaving it stale would print
-      // the old host and turn `<url>` into `[url](other)`.
       if (child.type === "link")
         for (const inner of child.children)
           if (inner.type === "text" && inner.value === previous) inner.value = child.url;
@@ -368,11 +309,6 @@ export function unredirectLinks(tree: Nodes): void {
   });
 }
 
-/**
- * Discord shows no inline images in message text, so badges and shields are dead
- * weight — often the longest URLs in a body. A link wrapping only an image keeps
- * the link, using its alt text as the label.
- */
 export function dropImages(tree: Nodes): void {
   visitParents(tree, (parent) => {
     const kept: RootContent[] = [];
@@ -394,7 +330,6 @@ export function dropImages(tree: Nodes): void {
         continue;
       }
 
-      // A paragraph that held nothing but images has nothing left to say.
       if (
         "children" in child &&
         child.children.length > 0 &&
@@ -407,7 +342,6 @@ export function dropImages(tree: Nodes): void {
 
     parent.children = kept as typeof parent.children;
 
-    // Removing an image leaves the spaces that surrounded it on either side.
     parent.children = parent.children.reduce<typeof parent.children>((kept, child) => {
       const previous = kept.at(-1);
 
@@ -421,11 +355,6 @@ export function dropImages(tree: Nodes): void {
   });
 }
 
-/**
- * A body's later sections are its detail — release notes, configuration, checklists. The
- * first heading that follows real content starts them, so everything from there is dropped.
- * Headings the body opens with are its own title and survive.
- */
 export function leadingSection(tree: Nodes): void {
   if (!("children" in tree)) return;
 
@@ -444,10 +373,6 @@ export function leadingSection(tree: Nodes): void {
   }
 }
 
-/**
- * A cell has nowhere to put an image: no gallery reaches inside a row, and Discord prints
- * `![age](url)` as the literal `!age`. Badges are decoration, so the cell keeps its words.
- */
 function cellContent(cell: { children: PhrasingContent[] } | undefined): PhrasingContent[] {
   const kept = (cell?.children ?? []).filter((child) => {
     if (child.type === "image") return false;
@@ -461,7 +386,6 @@ function cellContent(cell: { children: PhrasingContent[] } | undefined): Phrasin
 
   if (!kept.some((child) => child.type !== "text" || child.value.trim())) return [];
 
-  // A removed badge leaves whitespace behind, which the printer would escape as `&#x20;`.
   const first = kept.at(0);
   if (first?.type === "text") first.value = first.value.replace(/^\s+/, "");
 
@@ -471,23 +395,16 @@ function cellContent(cell: { children: PhrasingContent[] } | undefined): Phrasin
   return kept.filter((child) => child.type !== "text" || child.value);
 }
 
-/** Both ways of losing a table, so a message can pick one. */
 const tableFormats = { flat: flattenTables, list: listTables } satisfies Record<string, Transform>;
 
 export type TableFormat = keyof typeof tableFormats;
 
 let tableFormat: TableFormat = "list";
 
-/** Defers to {@link tableFormat}, so the choice travels with the message rather than the caller. */
 export function formatTables(tree: Nodes): void {
   tableFormats[tableFormat](tree);
 }
 
-/**
- * The other way to lose a table: each row becomes a bullet led by its first column,
- * with the remaining cells nested beneath it as their own items. Taller than
- * {@link flattenTables}, but a row with many columns stays readable.
- */
 export function listTables(tree: Nodes): void {
   visitParents(tree, (parent) => {
     parent.children = parent.children.flatMap((child) => {
@@ -544,10 +461,6 @@ export function listTables(tree: Nodes): void {
   });
 }
 
-/**
- * Discord has no table support, so each row becomes one line: the first column
- * leads in bold, and the rest are labelled with their headers.
- */
 export function flattenTables(tree: Nodes): void {
   visitParents(tree, (parent) => {
     parent.children = parent.children.flatMap((child) => {
@@ -571,7 +484,6 @@ export function flattenTables(tree: Nodes): void {
           ];
         });
 
-        // Trailing separator belongs between cells, not after the last one.
         if (described.at(-1)?.type === "text") described.pop();
 
         return [
@@ -583,7 +495,6 @@ export function flattenTables(tree: Nodes): void {
         ];
       });
 
-      // One paragraph keeps the rows on consecutive lines rather than spaced apart.
       return [{ type: "paragraph", children: rendered } as RootContent];
     }) as typeof parent.children;
   });

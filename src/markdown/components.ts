@@ -24,7 +24,6 @@ const divider: APISeparatorComponent = {
   spacing: 1,
 };
 
-/** Raw html is opaque to markdown, so `<img>` needs parsing rather than pattern matching. */
 function htmlImageSources(value: string): string[] {
   const sources: string[] = [];
 
@@ -40,13 +39,9 @@ function htmlImageSources(value: string): string[] {
   return sources;
 }
 
-/** Discord truncates past this, and a button labelled with an essay helps nobody. */
+/** Discord truncates a button label past this. */
 const labelLimit = 80;
 
-/**
- * A link whose whole visible content is an image is a button in everything but markup —
- * a shield, a badge, a "click here". Discord has that as a component.
- */
 function linkButtons(block: RootContent): APIButtonComponentWithURL[] | undefined {
   if (block.type !== "paragraph" || block.children.length === 0) return undefined;
 
@@ -74,10 +69,8 @@ function linkButtons(block: RootContent): APIButtonComponentWithURL[] | undefine
   return buttons;
 }
 
-/** Only a block that is nothing but images is content; an image beside text is decoration. */
 function imageSources(block: RootContent): string[] | undefined {
   if (block.type === "html") {
-    // An `<img>` without a source cannot render anywhere; printing its markup is worse.
     const isOnlyImages = parseDocument(block.value).children.every(
       (node) => (node as Element).name === "img" || !(node as { data?: string }).data?.trim(),
     );
@@ -101,10 +94,6 @@ function textComponent(blocks: RootContent[], root: Parent): APITextDisplayCompo
   return { type: ComponentType.TextDisplay, content };
 }
 
-/**
- * A message is a component tree, not one blob of text: a thematic break becomes a real
- * separator, and images Discord would otherwise print as markup become a gallery.
- */
 export function toComponents(body: string, transforms: Transform[] = []): MarkdownComponent[] {
   const tree = parseMarkdown(body);
   for (const transform of transforms) transform(tree);
@@ -176,7 +165,6 @@ export function toComponents(body: string, transforms: Transform[] = []): Markdo
       continue;
     }
 
-    // A divider only means something between two pieces of content.
     if (components.length === 0 && pending.length === 0) continue;
     if (flushText() || components.length > 0) components.push(divider);
   }

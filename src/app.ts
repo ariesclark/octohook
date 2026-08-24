@@ -12,19 +12,13 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 app.get("/", ({ redirect }) => redirect("https://github.com/ariesclark/octohook"));
 
-/** A message carrying an avatar is multipart, with the message itself under `payload_json`. */
 async function contentOf(request: Request): Promise<unknown> {
   return request.headers.get("content-type")?.startsWith("application/json")
     ? await request.json()
     : JSON.parse(String((await request.formData()).get("payload_json")));
 }
 
-/**
- * GitHub does not send an event twice once it has a 2xx, so a delivery dropped here is gone —
- * which is why this is awaited before answering rather than left to `waitUntil`. A failure that
- * outlives the retries becomes a 5xx, and a red delivery on the hook's own page is something a
- * person can see and replay.
- */
+/** GitHub does not send an event twice once it has a 2xx, so this is awaited before answering. */
 async function fold(channel: string, batch: Batch) {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -42,9 +36,6 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
   const event = get("event");
   const hook = get("hook");
 
-  // Without one, a run has no name, number or trigger — and with no trigger it belongs to no
-  // push, so a commit draws as a message per workflow rather than one board. Refused here, where
-  // the answer becomes a red delivery on the hook's own page, rather than quietly drawn badly.
   const token = req.query("token");
   if (!token)
     return json(
@@ -64,16 +55,11 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
     payload: foldablePayload(name, payload),
   };
 
-  // A check whose own url already names its run is a row in a board and will never be a message
-  // of its own, so it is not rendered. Anything else might be, and rendering costs no request.
   const request = localReferenceFor(delivery) ? null : await getWebhookRequest(secret, event, hook);
   if (request) delivery.content = await contentOf(request);
 
-  // Nothing renders it and nothing will gather it: there is no message in this event.
   if (!request && !shaOf(name, payload)) return json({ message: "Event dropped." });
 
-  // A hook carries its own token rather than the worker holding one for everybody, so two hooks
-  // pointing here can read two different organisations.
   try {
     const outcome = await fold(secret.split("/")[0]!, {
       secret,

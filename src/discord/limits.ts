@@ -1,9 +1,3 @@
-/**
- * What Discord will accept in one message. A renderer should not have to think about this: it
- * says what the event means, and delivery makes that fit — splitting into as many messages as
- * the limits demand, the way {@link ../merge} already chunks a batch.
- */
-
 export const maximumComponents = 40;
 export const maximumCharacters = 4000;
 
@@ -32,14 +26,8 @@ export function characterCount(components: MessageComponent[]): number {
   );
 }
 
-/**
- * As many messages as it takes, splitting only between top-level components — a quote torn in
- * half is worse than a second message. A component too big to fit alone still gets its own
- * message and is left to Discord to reject, since silently dropping it would be worse.
- */
 export function splitComponents(
   components: MessageComponent[],
-  /** Lower than the ceiling when the caller means to add a line of its own to each message. */
   budget: number = maximumCharacters,
 ): MessageComponent[][] {
   const messages: MessageComponent[][] = [];

@@ -11,7 +11,7 @@ export function pullRequestAction(event: PullRequestEvent): string {
   if (action === "converted_to_draft") return "converted to draft";
   if (action === "synchronize") return "updated";
 
-  // GitHub calls every body tweak an edit; only a rename or a new target says anything.
+  // GitHub calls every body tweak an edit.
   if (action === "edited") return changes?.base ? "retargeted" : "renamed";
 
   return action;

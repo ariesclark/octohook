@@ -1,4 +1,3 @@
-/** Only the parts of a commit that say who did what, so any shape carrying them will do. */
 type ContributionCommit = {
   author?: { username?: string };
   added?: string[];
@@ -6,10 +5,7 @@ type ContributionCommit = {
   modified?: string[];
 };
 
-/**
- * A push says nothing about lines changed, so the closest measure of who did the work is how
- * many commits they landed, and how many files those touched when the counts tie.
- */
+/** A push says nothing about lines changed. */
 export function authorsByContribution(commits: readonly ContributionCommit[]): string[] {
   const tallies = new Map<string, { commits: number; files: number; first: number }>();
 
