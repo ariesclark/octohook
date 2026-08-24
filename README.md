@@ -29,6 +29,9 @@ https://octohook.aries.fyi/<secret>?token=<github-token>
 
 ### The token
 
+> [!WARNING]
+> **The token is visible to anyone with admin on the repository**, since it sits in the webhook URL. Keep it fine-grained, read-only, Actions and Checks alone, on the repositories that hook here.
+
 `?token=` is required, and a hook without one is refused with a 400. Three lookups run under it, and no webhook payload carries what they return:
 
 - `GET /repos/{owner}/{repo}/actions/runs/{id}` for a run's name, its number, and what triggered it.
@@ -42,9 +45,6 @@ Filters go in the same URL:
 ```
 https://octohook.aries.fyi/<secret>?token=<github-token>&exclude=sender.type:Bot
 ```
-
-> [!WARNING]
-> The token rides in the webhook URL, and GitHub shows that URL in full to anyone with admin on the repository. Use a fine-grained token, read-only, Actions and Checks alone, listing only the repositories that hook here, and one token per hook so revoking it costs one channel. The worker never stores it: it arrives with each delivery and lives in memory only.
 
 ### What it draws
 
