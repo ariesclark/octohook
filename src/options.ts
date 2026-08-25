@@ -4,8 +4,25 @@ import type { GithubEvent, GithubEventPayload } from "./github";
 import type { HookScope } from "./discord/refs";
 import { strangeFields, type Query } from "./policy.ts";
 
-export function queryOf({ include, exclude }: Record<string, string | undefined>): Query {
-  return { include: include || undefined, exclude: exclude || undefined };
+/**
+ * A name for the one query worth writing down, so a hook can say a word rather than URL-encode a
+ * sentence. It expands to exactly the text below, and the 202 says so.
+ */
+export const presets: Record<string, string> = {
+  recommended: "type:run AND ever:passed AND details:0",
+};
+
+export function queryOf({
+  include,
+  exclude,
+  preset,
+}: Record<string, string | undefined>): Query {
+  const named = preset ? (presets[preset] ?? `preset:${preset}`) : undefined;
+
+  const both =
+    named && exclude ? `(${named}) OR (${exclude})` : (named ?? exclude ?? undefined);
+
+  return { include: include || undefined, exclude: both || undefined };
 }
 
 /** A query naming what no subject carries is refused whole, so say which words did it. */
