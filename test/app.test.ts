@@ -112,3 +112,48 @@ describe("the avatars the worker draws", () => {
     expect(response.headers.get("cache-control")).toContain("immutable");
   });
 });
+
+describe("a deployment status off a workflow run", () => {
+  const repository = {
+    name: "flirtual",
+    full_name: "flirtual/flirtual",
+    html_url: "https://github.com/flirtual/flirtual",
+  };
+
+  const post = (state: string, environmentUrl: string) =>
+    SELF.fetch(`https://octohook.test/${channel}/webhook-token?token=a-token`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-github-event": "deployment_status" },
+      body: JSON.stringify({
+        action: "created",
+        repository,
+        deployment: { id: 6092323147, environment: "canary", sha: "b504abd69b38" },
+        deployment_status: {
+          id: 1,
+          state,
+          environment: "canary",
+          environment_url: environmentUrl,
+          log_url: "https://github.com/flirtual/flirtual/actions/runs/32899961877/job/97972805937",
+          target_url:
+            "https://github.com/flirtual/flirtual/actions/runs/32899961877/job/97972805937",
+          created_at: "2026-08-25T21:21:00Z",
+          updated_at: "2026-08-25T21:21:00Z",
+        },
+        workflow_run: {
+          id: 32899961877,
+          html_url: "https://github.com/flirtual/flirtual/actions/runs/32899961877",
+        },
+        sender: { login: "kfarwell", avatar_url: "https://github.com/kfarwell.png" },
+      }),
+    });
+
+  it("folds the success that ends a deployment it already called underway", async () => {
+    expect(await (await post("in_progress", "")).json()).toMatchObject({
+      changed: ["opened deployment 6092323147 → in_progress at canary"],
+    });
+
+    expect(await (await post("success", "https://api-b504abd.flirtual.dev")).json()).toMatchObject({
+      changed: ["updated deployment 6092323147 → success at api-b504abd.flirtual.dev"],
+    });
+  });
+});

@@ -1,4 +1,5 @@
-import type { Annotation, ResolvedRun } from "./discord/events/check-run/run.ts";
+import type { Annotation, ReportedJob, ResolvedRun } from "./discord/events/check-run/run.ts";
+import { underway } from "./discord/events/check-run/facts.ts";
 import { wrong } from "./verdict.ts";
 
 export type Job = {
@@ -368,6 +369,9 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
 
       return `opened deployment ${next.id} → ${next.state} at ${place}`;
     }
+
+    // GitHub delivers in no order, so a start arriving after the finish must not withdraw it.
+    if (underway.has(next.state) && !underway.has(entry.deployments[index]!.state)) return "";
 
     entry.deployments[index] = next;
     latch(entry);

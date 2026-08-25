@@ -574,3 +574,57 @@ describe("a repository's query", () => {
     expect(lines(posts()[0]!)).toContain("pushed def5678");
   });
 });
+
+describe("a deployment the board is watching", () => {
+  const deploymentStatus = (at: string, sha: string, state: string): Folded => ({
+    event: "deployment_status",
+    action: "created",
+    delivered_at: at,
+    received_at: at,
+    payload: foldablePayload("deployment_status", {
+      repository,
+      workflow_run: { html_url: "https://github.com/flirtual/flirtual/actions/runs/900" },
+      deployment: { id: 6092323147, environment: "canary", sha },
+      deployment_status: {
+        state,
+        environment: "canary",
+        environment_url: state === "success" ? "https://api-b504abd.flirtual.dev" : "",
+        target_url: "https://github.com/flirtual/flirtual/actions/runs/900/job/97972805937",
+        log_url: "https://github.com/flirtual/flirtual/actions/runs/900/job/97972805937",
+      },
+    }),
+  });
+
+  it("stops calling a deployment underway once it succeeds", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(40), "abc1234")]);
+    await deliver(object, [job(secondsAgo(35), "abc1234", "image", "success")]);
+    await deliver(object, [deploymentStatus(secondsAgo(30), "abc1234", "in_progress")]);
+    await runDurableObjectAlarm(object);
+
+    expect(lines(posts()[0]!)).toContain("1 deploying");
+
+    await deliver(object, [deploymentStatus(secondsAgo(25), "abc1234", "success")]);
+    await runDurableObjectAlarm(object);
+
+    expect(patches()).toHaveLength(1);
+    expect(lines(patches()[0]!)).not.toContain("deploying");
+  });
+
+  it("keeps a deployment that succeeded settled when its start arrives late", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(40), "abc1234")]);
+    await deliver(object, [job(secondsAgo(35), "abc1234", "image", "success")]);
+    await deliver(object, [deploymentStatus(secondsAgo(25), "abc1234", "success")]);
+    await runDurableObjectAlarm(object);
+
+    expect(lines(posts()[0]!)).not.toContain("deploying");
+
+    await deliver(object, [deploymentStatus(secondsAgo(30), "abc1234", "in_progress")]);
+    await runDurableObjectAlarm(object);
+
+    expect(lines(patches()[0] ?? posts()[0]!)).not.toContain("deploying");
+  });
+});
