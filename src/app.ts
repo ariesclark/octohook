@@ -77,6 +77,8 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
       {
         message: "Event accepted.",
         ...outcome,
+        // What the channel is drawing by, spelled out, since a preset is a name for a sentence.
+        ...(query.include || query.exclude ? { drawing: query } : {}),
         ...(refused.length > 0 ? { refused } : {}),
       },
       { status: 202 },
