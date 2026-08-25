@@ -369,6 +369,76 @@ describe("apply", () => {
   });
 });
 
+describe("a check no workflow owns", () => {
+  const note = (key: string, kind: string, sha?: string): Note => ({
+    key,
+    seen: key,
+    kind,
+    sha,
+    at: key,
+    content: {},
+  });
+
+  const app = (over: object = {}) => ({
+    check_run: {
+      name: "CodeQL",
+      html_url: "https://github.com/o/r/runs/97940500970",
+      head_sha: "abc1234",
+      conclusion: "neutral",
+      started_at: null,
+      completed_at: null,
+      app: { name: "GitHub Advanced Security" },
+      pull_requests: [{ number: 288 }],
+      ...over,
+    },
+  });
+
+  test("takes the pull request the check names as its cause", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "completed", app()), { runId: "suite-89099420345" });
+
+    assert.equal(world.runs.get("suite-89099420345")!.cause, "pull_request");
+  });
+
+  test("names no cause when the check names no pull request", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "completed", app({ pull_requests: [] })), { runId: "s" });
+
+    assert.equal(world.runs.get("s")!.cause, undefined);
+  });
+
+  test("leaves a workflow run to say what set it off", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "completed", checkRun("build", "success")), {
+      runId: "7",
+      run: { name: "w", runNumber: 1, trigger: "schedule" },
+    });
+
+    assert.equal(world.runs.get("7")!.cause, undefined);
+  });
+
+  test("gives a check its pull request, once it has one to give it to", () => {
+    const notes = [note("a", "pull_request", "abc1234")];
+
+    assert.equal(ownerOf(notes, { sha: "abc1234", cause: "pull_request" })!.key, "a");
+  });
+
+  test("still gives a run with a trigger to the note that matches it", () => {
+    const notes = [note("a", "push", "abc1234"), note("b", "pull_request", "abc1234")];
+
+    assert.equal(
+      ownerOf(notes, { sha: "abc1234", run: { name: "w", runNumber: 1, trigger: "push" } })!.key,
+      "a",
+    );
+  });
+
+  test("gives a check with no cause to nobody", () => {
+    const notes = [note("a", "pull_request", "abc1234")];
+
+    assert.equal(ownerOf(notes, { sha: "abc1234" }), undefined);
+  });
+});
+
 describe("watching", () => {
   const somewhere = { name: "r", full_name: "o/r", html_url: "https://github.com/o/r" };
 
@@ -390,7 +460,10 @@ describe("watching", () => {
     const world = emptyWorld();
     apply(
       world,
-      delivery("check_run", "completed", { ...checkRun("build", "success"), repository: somewhere }),
+      delivery("check_run", "completed", {
+        ...checkRun("build", "success"),
+        repository: somewhere,
+      }),
       { runId: "14244" },
     );
 

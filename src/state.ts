@@ -30,6 +30,11 @@ export type Run = {
   sha?: string;
   branch?: string;
   run?: ResolvedRun;
+  /**
+   * What a check says caused it, for the checks GitHub Actions did not run: an app posts them
+   * through the Checks API, so there is no workflow run to ask what set them off.
+   */
+  cause?: string;
   title?: string;
   startedAt?: string;
   completedAt?: string;
@@ -61,8 +66,8 @@ export type Note = {
   content: unknown;
 };
 
-export function ownerOf(notes: Note[], run: Pick<Run, "sha" | "run">): Note | undefined {
-  const trigger = run.run?.trigger;
+export function ownerOf(notes: Note[], run: Pick<Run, "sha" | "run" | "cause">): Note | undefined {
+  const trigger = run.run?.trigger ?? run.cause;
   if (!run.sha || !trigger) return undefined;
 
   const candidates = notes.filter((note) => note.sha === run.sha && note.kind === trigger);
@@ -168,6 +173,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       completed_at: string | null;
       check_suite?: { head_branch?: string };
       app?: { name?: string };
+      pull_requests?: Array<{ number?: number }>;
       output?: { title?: string | null; summary?: string | null };
     };
 
@@ -177,6 +183,9 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.sha ??= check.head_sha;
     entry.branch ??= check.check_suite?.head_branch;
     entry.title ??= check.app?.name;
+
+    // An app's check names the pull request it is for, which is the only cause it ever states.
+    if (!resolved.run && check.pull_requests?.length) entry.cause ??= "pull_request";
 
     const job: Job = {
       name: check.name,

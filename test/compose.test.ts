@@ -198,3 +198,97 @@ describe("compose, under a repository's query", () => {
     expect(keys(built, queries({ include: "check_run.conclusion:success" }))).toHaveLength(1);
   });
 });
+
+describe("a check an app posted", () => {
+  const opened = (built: World) => {
+    apply(
+      built,
+      {
+        event: "pull_request",
+        action: "opened",
+        delivered_at: "2026-08-24T01:00:00Z",
+        payload: { repository, pull_request: { head: { sha: "abc1234" } } } as never,
+      },
+      { content: { components: [{ type: 10, content: "opened #288" }] } },
+    );
+
+    return built;
+  };
+
+  const scanned = (built: World, pulls: object[]) => {
+    apply(
+      built,
+      {
+        event: "check_run",
+        action: "completed",
+        delivered_at: "2026-08-24T01:00:05Z",
+        payload: {
+          repository,
+          check_run: {
+            name: "CodeQL",
+            html_url: "https://g/o/wiki-bot/runs/97940500970",
+            head_sha: "abc1234",
+            conclusion: "neutral",
+            started_at: null,
+            completed_at: null,
+            app: { name: "GitHub Advanced Security" },
+            pull_requests: pulls,
+            output: { title: "4 configurations not found" },
+          },
+        } as never,
+      },
+      { runId: "suite-89099420345" },
+    );
+
+    return built;
+  };
+
+  it("folds into the pull request it names", () => {
+    const built = scanned(opened(emptyWorld()), [{ number: 288 }]);
+    const [message, ...rest] = compose(built, repository);
+
+    expect(rest).toEqual([]);
+    expect(message!.key).toBe("pull_request.opened:2026-08-24T01:00:00Z");
+    expect(JSON.stringify(message!.content)).toContain("CodeQL");
+  });
+
+  it("keeps its own board when it names no pull request", () => {
+    const built = scanned(opened(emptyWorld()), []);
+
+    expect(compose(built, repository).map(({ key }) => key)).toEqual([
+      "pull_request.opened:2026-08-24T01:00:00Z",
+      "run:suite-89099420345",
+    ]);
+  });
+
+  it("never draws the suite it was keyed by", () => {
+    const built = scanned(opened(emptyWorld()), []);
+    const drawn = JSON.stringify(compose(built, repository).map(({ content }) => content));
+
+    expect(drawn).not.toContain("suite-89099420345");
+  });
+
+  it("names a suite nothing titled by what it is, not by its key", () => {
+    const built = opened(emptyWorld());
+
+    apply(
+      built,
+      {
+        event: "check_suite",
+        action: "completed",
+        delivered_at: "2026-08-24T01:00:05Z",
+        payload: {
+          repository,
+          check_suite: { conclusion: "success", head_sha: "abc1234" },
+        } as never,
+      },
+      { runId: "suite-77" },
+    );
+
+    built.runs.get("suite-77")!.cause = "pull_request";
+    const drawn = JSON.stringify(compose(built, repository).map(({ content }) => content));
+
+    expect(drawn).not.toContain("suite-77");
+    expect(drawn).toContain("checks");
+  });
+});

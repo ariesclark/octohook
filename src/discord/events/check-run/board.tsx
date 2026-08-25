@@ -124,7 +124,7 @@ export function CommitBoard({
 
         const title = entry.run
           ? `${workflowName(entry.run.name)} #${entry.run.runNumber}`
-          : (entry.title ?? entry.runId);
+          : (entry.title ?? t("run.checks"));
 
         return [
           <text>
