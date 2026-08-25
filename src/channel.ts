@@ -42,10 +42,16 @@ const watchEvery = 5_000;
 /** A run whose finish never arrives would otherwise be asked about forever. */
 const maximumWatches = 240;
 
+export type Trouble = { at: string; failed: number; keys: string[] };
+
 export type Outcome = {
   changed: string[];
   revision: number;
   drawAt: number;
+  /** What the channel is holding, so a delivery's own answer says whether it landed. */
+  holding: { runs: number; notes: number; drawn: number };
+  /** The last draw Discord refused, kept until one goes through. */
+  trouble?: Trouble;
 };
 
 export type Batch = {
@@ -126,7 +132,15 @@ export class Channel extends DurableObject<CloudflareBindings> {
 
     await this.ctx.storage.setAlarm(flushAt);
 
-    return { changed, revision, drawAt: flushAt };
+    const holding = {
+      runs: [...kv.list({ prefix: "run:" })].length,
+      notes: world.notes.length,
+      drawn: [...kv.list({ prefix: "sent:" })].length,
+    };
+
+    const trouble = kv.get<Trouble>("trouble");
+
+    return { changed, revision, drawAt: flushAt, holding, ...(trouble ? { trouble } : {}) };
   }
 
   /** Objects deployed before runs had keys of their own still hold one `world`. */
@@ -279,7 +293,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
     for (const [key, value] of kv.list<Query>({ prefix: "query:" }))
       queries.set(key.slice("query:".length), value);
 
-    const { pending } = await deliverAll(
+    const { pending, failed } = await deliverAll(
       compose(world, meta.repository, meta.hook, queries),
       discordTransport(meta.secret),
       held,
@@ -290,6 +304,14 @@ export class Channel extends DurableObject<CloudflareBindings> {
       "",
       { deletionBudget },
     );
+
+    if (failed.length > 0)
+      kv.put("trouble", {
+        at: new Date().toISOString(),
+        failed: failed.length,
+        keys: failed,
+      } satisfies Trouble);
+    else kv.delete("trouble");
 
     return { revision, pending };
   }

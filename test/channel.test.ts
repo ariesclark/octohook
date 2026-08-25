@@ -426,6 +426,77 @@ describe("a run still in flight", () => {
   });
 });
 
+describe("what the channel answers GitHub with", () => {
+  it("says what it is holding", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    const outcome = await deliver(object, [job(secondsAgo(29), "abc1234", "build", null)]);
+
+    expect(outcome.holding).toEqual({ runs: 1, notes: 1, drawn: 0 });
+  });
+
+  it("counts what it has drawn once it has drawn it", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    await runDurableObjectAlarm(object);
+
+    const outcome = await deliver(object, [push(secondsAgo(20), "def5678")]);
+
+    expect(outcome.holding.drawn).toBe(1);
+  });
+
+  it("posts a message a refused draw left behind, once Discord takes it", async () => {
+    const object = stub();
+    const inner = globalThis.fetch as typeof fetch;
+    let refusing = true;
+
+    vi.stubGlobal("fetch", async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+
+      if (refusing && url.includes("discord.com") && init?.method === "POST")
+        return new Response("bad", { status: 400 });
+
+      return inner(input, init);
+    });
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    await runDurableObjectAlarm(object);
+
+    expect(posts()).toHaveLength(0);
+
+    refusing = false;
+    await deliver(object, [push(secondsAgo(20), "def5678")]);
+    await runDurableObjectAlarm(object);
+
+    expect(posts()).toHaveLength(2);
+    expect(lines(posts()[0]!)).toContain("pushed abc1234");
+  });
+
+  it("reports a message Discord would not take", async () => {
+    const object = stub();
+    const inner = globalThis.fetch as typeof fetch;
+
+    vi.stubGlobal("fetch", async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+
+      if (url.includes("discord.com") && init?.method === "POST")
+        return new Response("bad", { status: 400 });
+
+      return inner(input, init);
+    });
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    await runDurableObjectAlarm(object);
+
+    const outcome = await deliver(object, [push(secondsAgo(20), "def5678")]);
+
+    expect(outcome.trouble?.failed).toBe(1);
+    expect(outcome.trouble?.at).toEqual(expect.any(String));
+  });
+});
+
 describe("a repository's query", () => {
   it("keeps out what it names, and lets the rest through", async () => {
     const object = stub();

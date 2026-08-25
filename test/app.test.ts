@@ -72,6 +72,7 @@ describe("a hook without a token", () => {
       changed: ["noted star.created"],
       revision: 1,
       drawAt: expect.any(Number),
+      holding: { runs: 0, notes: 1, drawn: 0 },
     });
   });
 });
