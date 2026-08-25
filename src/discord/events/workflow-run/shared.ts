@@ -8,4 +8,3 @@ export function workflowName(name: string): string {
 export function triggerLabel(trigger: string): string {
   return tOf("trigger", trigger, trigger);
 }
-

@@ -117,6 +117,8 @@ export function dryTransport(): Transport {
 export type Capture = (key: string, held: Held | undefined) => void;
 
 /** Discord accepts `message_reference` on a webhook execute and silently drops it. */
+export type Drew = { changed: boolean; sent: boolean };
+
 export async function deliverOne(
   key: string,
   content: Content,
@@ -124,11 +126,11 @@ export async function deliverOne(
   held: Held | undefined,
   record: Capture,
   at = "",
-): Promise<boolean> {
+): Promise<Drew> {
   const drawn = JSON.stringify(content);
 
   // A record with no message id behind it is not a drawn message, whatever it says it drew.
-  if (held?.drawn === drawn && held.ids.length > 0) return false;
+  if (held?.drawn === drawn && held.ids.length > 0) return { changed: false, sent: true };
 
   const components = (content.components ?? []) as MessageComponent[];
 
@@ -170,7 +172,7 @@ export async function deliverOne(
   const sent = ids.length === parts.length && kept.length === 0;
 
   record(key, { ids: [...ids, ...kept], drawn: sent ? drawn : "" });
-  return true;
+  return { changed: true, sent };
 }
 
 export async function deliverAll(
@@ -190,7 +192,7 @@ export async function deliverAll(
   for (const message of composed) {
     const previous = held.get(message.key);
 
-    const changed = await deliverOne(
+    const { changed, sent } = await deliverOne(
       message.key,
       message.content as Content,
       transport,
@@ -205,13 +207,15 @@ export async function deliverAll(
     );
 
     if (changed) redrawn += 1;
-    if (held.get(message.key)?.drawn === "") failed.push(message.key);
+    if (!sent) failed.push(message.key);
   }
 
   let tried = 0;
 
+  const drawing = new Set(composed.map(({ key }) => key));
+
   for (const [key, previous] of held) {
-    if (composed.some((message) => message.key === key)) continue;
+    if (drawing.has(key)) continue;
 
     if (tried >= deletionBudget) {
       pending += 1;

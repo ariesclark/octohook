@@ -19,12 +19,19 @@ app.get("/avatars", async ({ req, json, newResponse }) => {
   const sources = avatarSources(new URL(req.url));
   if (sources.length === 0) return json({ message: "No GitHub avatar asked for." }, 400);
 
+  const kept = await caches.default.match(req.raw);
+  if (kept) return kept;
+
   const drawn = await compositeAuthorAvatars(sources);
 
-  return newResponse(drawn as unknown as ArrayBuffer, 200, {
+  const answer = newResponse(drawn as unknown as ArrayBuffer, 200, {
     "content-type": "image/png",
     "cache-control": "public, max-age=31536000, immutable",
   });
+
+  await caches.default.put(req.raw, answer.clone());
+
+  return answer;
 });
 
 async function contentOf(request: Request): Promise<unknown> {
@@ -72,8 +79,11 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
     payload: foldablePayload(name, payload),
   };
 
-  const request = localReferenceFor(delivery) ? null : await getWebhookRequest(secret, event, hook);
-  if (request) delivery.content = withoutUploads((await contentOf(request)) as Record<string, unknown>);
+  const request = localReferenceFor(delivery)
+    ? null
+    : await getWebhookRequest(secret, event, hook, new URL(req.url).origin);
+  if (request)
+    delivery.content = withoutUploads((await contentOf(request)) as Record<string, unknown>);
 
   if (!request && !shaOf(name, payload)) return json({ message: "Event dropped." });
 

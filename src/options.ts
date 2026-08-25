@@ -9,19 +9,13 @@ import { strangeFields, type Query } from "./policy.ts";
  * sentence. It expands to exactly the text below, and the 202 says so.
  */
 export const presets: Record<string, string> = {
-  recommended:
-    "type:run AND (ever:passed OR ever:skipped OR ever:cancelled) AND details:0",
+  recommended: "type:run AND (ever:passed OR ever:skipped OR ever:cancelled) AND details:0",
 };
 
-export function queryOf({
-  include,
-  exclude,
-  preset,
-}: Record<string, string | undefined>): Query {
+export function queryOf({ include, exclude, preset }: Record<string, string | undefined>): Query {
   const named = preset ? (presets[preset] ?? `preset:${preset}`) : undefined;
 
-  const both =
-    named && exclude ? `(${named}) OR (${exclude})` : (named ?? exclude ?? undefined);
+  const both = named && exclude ? `(${named}) OR (${exclude})` : (named ?? exclude ?? undefined);
 
   return { include: include || undefined, exclude: both || undefined };
 }
@@ -50,9 +44,7 @@ export const optionsMiddleware = createMiddleware<{
   const event = {
     ...body,
     type: `${name}${action ? `.${action}` : ""}`,
-    // Where a drawn message can reach this worker back, for anything Discord has to fetch.
-    origin: new URL(req.url).origin,
-  } as unknown as GithubEvent;
+  } as GithubEvent;
 
   // Absent on older deliveries and on replays.
   const target = req.header("x-github-hook-installation-target-type");

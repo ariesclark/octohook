@@ -7,7 +7,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Channel } from "../src/channel.ts";
-import type { Folded } from "../src/foldable.ts";
+import { foldablePayload, type Folded } from "../src/foldable.ts";
 
 let nth = 0;
 let channel = "";
@@ -492,7 +492,7 @@ describe("what the channel answers GitHub with", () => {
 
     const outcome = await deliver(object, [push(secondsAgo(20), "def5678")]);
 
-    expect(outcome.trouble?.failed).toBe(1);
+    expect(outcome.trouble?.keys).toHaveLength(1);
     expect(outcome.trouble?.at).toEqual(expect.any(String));
   });
 });

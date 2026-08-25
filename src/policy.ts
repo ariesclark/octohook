@@ -94,7 +94,9 @@ export function subjectOfRun(run: Run): RunSubject {
   const running = run.jobs.filter(({ conclusion }) => !conclusion).length;
   const skipped = run.jobs.filter(({ conclusion }) => conclusion === "skipped").length;
 
-  const ever: Result = run.alarmed === true || wrong(run) ? "failed" : resultOf(run);
+  const result = resultOf(run);
+  const ever: Result = run.alarmed === true || wrong(run) ? "failed" : result;
+  const annotations = warningsUnder(run);
 
   return {
     type: "run",
@@ -104,11 +106,11 @@ export function subjectOfRun(run: Run): RunSubject {
     trigger: run.run?.trigger,
     workflow: run.run?.name,
     number: run.run?.runNumber,
-    result: resultOf(run),
+    result,
     ever,
     seconds: secondsOf(run),
-    details: detailsUnder(run),
-    annotations: warningsUnder(run),
+    details: detailsUnder(run, annotations),
+    annotations,
     deployments: run.deployments.length,
     jobs: {
       total: run.jobs.length,

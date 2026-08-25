@@ -106,6 +106,7 @@ const mostFaces = 4;
 export function avatarSources(asked: URL): string[] {
   return asked.searchParams
     .getAll("u")
+    .slice(0, mostFaces * 2)
     .filter((url) => {
       try {
         const { protocol, hostname } = new URL(url);
@@ -119,10 +120,10 @@ export function avatarSources(asked: URL): string[] {
 
 /** One face needs no drawing; several are drawn into one by the worker, and cached by Discord. */
 export function compositeUrl(origin: string, urls: string[]): string {
-  if (urls.length <= 1) return urls[0] ?? "";
+  if (urls.length === 1) return urls[0]!;
 
   const asked = new URL("/avatars", origin);
-  for (const url of urls.slice(0, mostFaces)) asked.searchParams.append("u", url);
+  for (const url of urls) asked.searchParams.append("u", url);
 
   return asked.toString();
 }

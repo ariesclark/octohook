@@ -18,8 +18,9 @@ export async function getWebhookRequest(
   secret: string,
   event: GithubEvent,
   hook: HookScope = "repository",
+  origin?: string,
 ): Promise<Request | null> {
-  const content = await getWebhookContent(event, hook);
+  const content = await getWebhookContent(event, hook, origin);
   if (!content) return null;
 
   return toRequest(secret, { ...defaultWebhookContent, ...content });
@@ -28,10 +29,11 @@ export async function getWebhookRequest(
 async function getWebhookContent(
   event: GithubEvent,
   hook: HookScope,
+  origin?: string,
 ): Promise<WebhookContent | null> {
   switch (event.type) {
     case "push":
-      return getPushContent(event, hook);
+      return getPushContent(event, hook, origin);
 
     case "deployment_status.created":
       return getDeploymentStatusContent(event, hook);

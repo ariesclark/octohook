@@ -1,4 +1,4 @@
-import { severity, type Annotation } from "./run.ts";
+import { meetsAnnotationLevel, severity, type Annotation } from "./run.ts";
 
 const longest = 110;
 
@@ -58,4 +58,9 @@ export function worthSaying(annotations: Annotation[]): Annotation[] {
 
 export function bySeverity(left: Annotation, right: Annotation): number {
   return severity(right.level) - severity(left.level);
+}
+
+/** The annotations a reader would see under a job: worth showing, and folded when they repeat. */
+export function visible(job: { annotations?: Annotation[] }): Counted[] {
+  return fold((job.annotations ?? []).filter(meetsAnnotationLevel));
 }

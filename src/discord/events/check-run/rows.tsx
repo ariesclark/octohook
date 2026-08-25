@@ -1,7 +1,8 @@
 import { t, tOf } from "../../messages.ts";
 import { summarise } from "../../../markdown/summary";
-import { annotationText, bySeverity, fileUrl, fold } from "./annotations.ts";
-import { meetsAnnotationLevel } from "./run";
+import { annotationText, bySeverity, visible } from "./annotations.ts";
+import { fileUrl } from "./annotations.ts";
+import { arrived, said, underway } from "./facts.ts";
 import { checkDuration } from "./shared";
 
 const small = "-# ";
@@ -52,28 +53,23 @@ function jobFailed(job: BoardJob): boolean {
   return failed.has(job.conclusion ?? "");
 }
 
-export const underway = new Set(["in_progress", "queued", "pending"]);
-
-export function arrived(deployments: BoardDeployment[]): BoardDeployment[] {
-  return deployments.filter(({ state }) => !underway.has(state));
-}
+export { arrived, underway };
 
 function deploymentsOf(job: BoardJob, deployments: BoardDeployment[] = []) {
   return arrived(deployments).filter(({ jobUrl }) => jobUrl && jobUrl === job.url);
 }
 
 function jobTalks(job: BoardJob): boolean {
-  return (
-    fold((job.annotations ?? []).filter(meetsAnnotationLevel)).length > 0 || Boolean(outputOf(job))
-  );
+  return visible(job).length > 0 || said(job);
 }
 
-function running(job: BoardJob): boolean {
-  return !job.conclusion;
+/** A job is on a step only until it has a verdict; after that the step is history. */
+function stepOf(job: BoardJob): string | undefined {
+  return job.conclusion ? undefined : job.step;
 }
 
 function jobSpeaks(job: BoardJob, deployments: BoardDeployment[] = []): boolean {
-  return Boolean(running(job) && job.step) || jobTalks(job) || deploymentsOf(job, deployments).length > 0;
+  return Boolean(stepOf(job)) || jobTalks(job) || deploymentsOf(job, deployments).length > 0;
 }
 
 function looseDeployments(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
@@ -95,7 +91,7 @@ function Annotations({
   repositoryUrl: string;
   sha?: string;
 }) {
-  const folded = fold((job.annotations ?? []).filter(meetsAnnotationLevel)).sort(bySeverity);
+  const folded = visible(job).sort(bySeverity);
   const listed = folded.slice(0, jobFailed(job) ? shown.failed : shown.passed);
   const rest = folded.length - listed.length;
 
@@ -166,7 +162,7 @@ function Job({
   first,
 }: Rows & { job: BoardJob; first: boolean }) {
   const duration = checkDuration(job.startedAt, job.completedAt);
-  const step = running(job) ? job.step : undefined;
+  const step = stepOf(job);
   const said = outputOf(job);
 
   return (
@@ -218,8 +214,10 @@ export function runSummary(
     .join(", ");
 
   // A run with work still in it has no length yet, whatever an earlier fold wrote down.
-  const over = jobs.length === 0 || jobs.every(({ conclusion }) => conclusion);
-  const duration = over ? checkDuration(ran?.startedAt ?? null, ran?.completedAt ?? null) : undefined;
+  const over = jobs.every(({ conclusion }) => conclusion);
+  const duration = over
+    ? checkDuration(ran?.startedAt ?? null, ran?.completedAt ?? null)
+    : undefined;
   const took = duration ? t("check.took", { duration }) : undefined;
 
   if (!took) return counted;

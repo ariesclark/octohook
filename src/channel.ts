@@ -9,6 +9,7 @@ import type { Query } from "./policy.ts";
 import { resolveFor } from "./resolve.ts";
 import {
   apply,
+  applyJobs,
   forget,
   watching,
   type Note,
@@ -42,7 +43,7 @@ const watchEvery = 5_000;
 /** A run whose finish never arrives would otherwise be asked about forever. */
 const maximumWatches = 240;
 
-export type Trouble = { at: string; failed: number; keys: string[] };
+export type Trouble = { at: string; keys: string[] };
 
 export type Outcome = {
   changed: string[];
@@ -61,6 +62,14 @@ export type Batch = {
   query?: Query;
   deliveries: Folded[];
 };
+
+/** Counting a prefix without spreading it, so a count does not deserialise every value it passes. */
+function counted(kv: DurableObjectStorage["kv"], prefix: string): number {
+  let total = 0;
+  for (const _ of kv.list({ prefix })) total += 1;
+
+  return total;
+}
 
 export class Channel extends DurableObject<CloudflareBindings> {
   #github: Github | undefined;
@@ -133,9 +142,9 @@ export class Channel extends DurableObject<CloudflareBindings> {
     await this.ctx.storage.setAlarm(flushAt);
 
     const holding = {
-      runs: [...kv.list({ prefix: "run:" })].length,
+      runs: counted(kv, "run:"),
       notes: world.notes.length,
-      drawn: [...kv.list({ prefix: "sent:" })].length,
+      drawn: counted(kv, "sent:"),
     };
 
     const trouble = kv.get<Trouble>("trouble");
@@ -250,28 +259,25 @@ export class Channel extends DurableObject<CloudflareBindings> {
     const github = this.#githubFor(this.#token);
     let moved = false;
 
-    for (const entry of runs) {
-      const repository = entry.repository!.full_name!;
-      const { etag, jobs } = await github.watchJobs({ repository, runId: entry.id }, entry.etag);
+    // The asks are independent, so they go together; the folds share a world, so they go in turn.
+    const answers = await Promise.all(
+      runs.map(async (entry) => ({
+        entry,
+        ...(await github.watchJobs(
+          { repository: entry.repository!.full_name!, runId: entry.id },
+          entry.etag,
+        )),
+      })),
+    );
 
+    const seen = new Date().toISOString();
+
+    for (const { entry, etag, jobs } of answers) {
+      // A fresh tag is worth keeping even when nothing moved: it is what makes the next ask free.
+      if (etag !== entry.etag) moved = true;
       entry.etag = etag;
-      if (!jobs) continue;
 
-      for (const job of jobs) {
-        const said = apply(
-          world,
-          {
-            event: "workflow_job",
-            action: job.status,
-            delivered_at: entry.at,
-            received_at: new Date().toISOString(),
-            payload: { repository: entry.repository, workflow_job: job } as Record<string, unknown>,
-          },
-          { runId: entry.id },
-        );
-
-        if (said) moved = true;
-      }
+      if (jobs) moved = applyJobs(world, entry.id, jobs, entry.at, seen).length > 0 || moved;
     }
 
     return moved;
@@ -306,11 +312,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
     );
 
     if (failed.length > 0)
-      kv.put("trouble", {
-        at: new Date().toISOString(),
-        failed: failed.length,
-        keys: failed,
-      } satisfies Trouble);
+      kv.put("trouble", { at: new Date().toISOString(), keys: failed } satisfies Trouble);
     else kv.delete("trouble");
 
     return { revision, pending };

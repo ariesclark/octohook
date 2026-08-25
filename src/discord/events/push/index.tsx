@@ -7,6 +7,7 @@ import { PushEvent } from "./shared";
 export async function getPushContent(
   event: PushEvent,
   hook: HookScope,
+  origin?: string,
 ): Promise<WebhookContent | null> {
   const branch = event.ref.replace(/^refs\/(heads|tags)\//, "");
 
@@ -19,5 +20,5 @@ export async function getPushContent(
   if (event.commits.length === 0)
     return event.created ? <BranchCreated event={event} branch={branch} hook={hook} /> : null;
 
-  return <PushMessage event={event} branch={branch} hook={hook} />;
+  return <PushMessage event={event} branch={branch} hook={hook} origin={origin} />;
 }

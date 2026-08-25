@@ -19,7 +19,8 @@ export async function PushMessage({
   event,
   branch,
   hook,
-}: PushVariantProps): Promise<WebhookContent> {
+  origin,
+}: PushVariantProps & { origin?: string }): Promise<WebhookContent> {
   const sender = pushSender(event);
   const identity = { username: displayUsername(sender.login), avatar_url: sender.avatar_url };
 
@@ -48,7 +49,7 @@ export async function PushMessage({
 
   const { url } = avatarThumbnail(
     others.slice(0, thumbnailAuthors).map((username) => authorAvatarUrl(event, username)),
-    (event as { origin?: string }).origin,
+    origin,
   );
 
   const taken = besideThumbnail(event.commits, {

@@ -4,7 +4,11 @@ import { describe, test } from "node:test";
 import { foldablePayload, isFoldable, shaOf } from "./foldable.ts";
 
 const payload = {
-  repository: { name: "wiki-bot", full_name: "o/wiki-bot", html_url: "https://github.com/o/wiki-bot" },
+  repository: {
+    name: "wiki-bot",
+    full_name: "o/wiki-bot",
+    html_url: "https://github.com/o/wiki-bot",
+  },
   workflow_run: {
     id: 14244,
     name: "Bot",

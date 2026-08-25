@@ -1,5 +1,5 @@
-import { fold } from "./discord/events/check-run/annotations.ts";
-import { meetsAnnotationLevel } from "./discord/events/check-run/run.ts";
+import { visible } from "./discord/events/check-run/annotations.ts";
+import { arrived, said } from "./discord/events/check-run/facts.ts";
 import type { Deployment, Job, Run } from "./state.ts";
 
 /**
@@ -23,15 +23,13 @@ export function wrong(run: Pick<Run, "jobs" | "deployments" | "settled">): boole
 
 /** The annotations a reader would see, folded the way the board folds a repeated one. */
 export function warningsUnder(run: Pick<Run, "jobs">): number {
-  return run.jobs.reduce(
-    (count, job) => count + fold((job.annotations ?? []).filter(meetsAnnotationLevel)).length,
-    0,
-  );
+  return run.jobs.reduce((count, job) => count + visible(job).length, 0);
 }
 
 /** Everything the board draws beneath the run: annotations, a job's own summary, deployments. */
-export function detailsUnder(run: Pick<Run, "jobs" | "deployments">): number {
-  const summaries = run.jobs.filter(({ output }) => output?.title || output?.summary).length;
-
-  return warningsUnder(run) + summaries + run.deployments.length;
+export function detailsUnder(
+  run: Pick<Run, "jobs" | "deployments">,
+  warnings = warningsUnder(run),
+): number {
+  return warnings + run.jobs.filter(said).length + arrived(run.deployments).length;
 }

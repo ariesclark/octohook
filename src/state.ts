@@ -112,6 +112,58 @@ function run(world: World, id: string, at: string, seen: string): Run {
   return created;
 }
 
+/** One job, however it was reported: a verdict already reached is never withdrawn by a later say. */
+function upsertJob(entry: Run, job: Job): "added" | "updated" | "" {
+  const index = entry.jobs.findIndex(({ name }) => name === job.name);
+
+  if (index === -1) {
+    entry.jobs.push(job);
+    latch(entry);
+
+    return "added";
+  }
+
+  // GitHub can deliver a `created` after the `completed` it belongs to.
+  if (!job.conclusion && entry.jobs[index]!.conclusion) return "";
+
+  entry.jobs[index] = { ...entry.jobs[index]!, ...job };
+  latch(entry);
+
+  return "updated";
+}
+
+/** What the jobs endpoint says a run is doing, folded the way its events would be. */
+export function applyJobs(
+  world: World,
+  runId: string,
+  jobs: ReportedJob[],
+  at: string,
+  seen: string,
+): string[] {
+  const entry = run(world, runId, at, seen);
+
+  return jobs
+    .map((reported) => {
+      const said = upsertJob(entry, jobOf(reported));
+      return said ? `${reported.name} ${said}` : "";
+    })
+    .filter(Boolean);
+}
+
+function jobOf(reported: ReportedJob): Job {
+  return {
+    name: reported.name,
+    url: reported.html_url,
+    conclusion: reported.conclusion,
+    startedAt: reported.started_at,
+    completedAt: reported.completed_at,
+    step:
+      reported.status === "completed"
+        ? undefined
+        : reported.steps?.find(({ status }) => status === "in_progress")?.name,
+  };
+}
+
 function latch(entry: Run): void {
   if (wrong(entry)) entry.alarmed = true;
 }
@@ -200,21 +252,8 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
           : undefined,
     };
 
-    const index = entry.jobs.findIndex(({ name }) => name === job.name);
-    if (index === -1) {
-      entry.jobs.push(job);
-      latch(entry);
-
-      return `added job ${job.name} → ${job.conclusion ?? "running"}`;
-    }
-
-    // GitHub can deliver a `created` after the `completed` it belongs to.
-    if (!job.conclusion && entry.jobs[index]!.conclusion) return "";
-
-    entry.jobs[index] = { ...job, annotations: job.annotations ?? entry.jobs[index]!.annotations };
-    latch(entry);
-
-    return `updated job ${job.name} → ${job.conclusion ?? "running"}`;
+    const said = upsertJob(entry, job);
+    return said ? `${said} job ${job.name} → ${job.conclusion ?? "running"}` : "";
   }
 
   if (event === "check_suite") {
@@ -240,48 +279,16 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
   if (event === "workflow_job") {
     if (!resolved.runId) return "";
 
-    const reported = payload.workflow_job as unknown as {
-      name: string;
-      status: string;
-      conclusion: string | null;
-      html_url: string;
-      started_at: string | null;
-      completed_at: string | null;
-      steps?: Array<{ name: string; status: string }>;
-    };
+    const reported = payload.workflow_job as unknown as ReportedJob;
 
     const entry = run(world, resolved.runId, at, seen);
     entry.repository ??= repositoryIn(payload);
 
-    const step =
-      reported.status === "completed"
-        ? undefined
-        : reported.steps?.find(({ status }) => status === "in_progress")?.name;
-
-    const job: Job = {
-      name: reported.name,
-      url: reported.html_url,
-      conclusion: reported.conclusion,
-      startedAt: reported.started_at,
-      completedAt: reported.completed_at,
-      step,
-    };
-
-    const index = entry.jobs.findIndex(({ name }) => name === job.name);
-    if (index === -1) entry.jobs.push(job);
-    else
-      entry.jobs[index] = {
-        ...entry.jobs[index]!,
-        ...job,
-        conclusion: job.conclusion ?? entry.jobs[index]!.conclusion,
-        annotations: entry.jobs[index]!.annotations,
-        output: entry.jobs[index]!.output,
-      };
-
-    latch(entry);
+    const job = jobOf(reported);
+    if (!upsertJob(entry, job)) return "";
 
     if (job.conclusion) return `${job.name} → ${job.conclusion}`;
-    return step ? `${job.name} is on ${step}` : `${job.name} is ${reported.status}`;
+    return job.step ? `${job.name} is on ${job.step}` : `${job.name} is ${reported.status}`;
   }
 
   if (event === "workflow_run") {
