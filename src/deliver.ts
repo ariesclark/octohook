@@ -13,12 +13,25 @@ export type Held = { ids: string[]; drawn: string };
 
 export type Transport = {
   send(content: Content, messageId?: string, at?: string): Promise<string | undefined>;
-  remove(messageId: string): Promise<void>;
+  /** Whether the message is gone. A delete that was refused keeps its record for the next draw. */
+  remove(messageId: string): Promise<boolean>;
   split(components: MessageComponent[], budget?: number): MessageComponent[][];
   where?(): Promise<{ guild_id?: string; channel_id?: string }>;
 };
 
 export const continuation = 160;
+
+/** A rate limit that will not say how long to wait is one to report rather than guess about. */
+async function retryAfter(response: Response): Promise<number | undefined> {
+  try {
+    const { retry_after: seconds } = (await response.json()) as { retry_after?: number };
+    if (typeof seconds !== "number" || !Number.isFinite(seconds)) return undefined;
+
+    return (seconds + 0.1) * 1000;
+  } catch {
+    return undefined;
+  }
+}
 
 export function discordTransport(secret: string): Transport {
   const base = `https://discord.com/api/webhooks/${secret}`;
@@ -36,9 +49,10 @@ export function discordTransport(secret: string): Transport {
     });
 
     if (response.status === 429) {
-      const { retry_after: retryAfter } = (await response.json()) as { retry_after: number };
-      await new Promise((resolve) => setTimeout(resolve, (retryAfter + 0.1) * 1000));
+      const wait = await retryAfter(response);
+      if (wait === undefined) return messageId;
 
+      await new Promise((resolve) => setTimeout(resolve, wait));
       return send(content, messageId);
     }
 
@@ -57,11 +71,24 @@ export function discordTransport(secret: string): Transport {
     return id;
   };
 
+  const remove = async (messageId: string): Promise<boolean> => {
+    const response = await fetch(`${base}/messages/${messageId}`, { method: "DELETE" });
+
+    if (response.status === 429) {
+      const wait = await retryAfter(response);
+      if (wait === undefined) return false;
+
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      return remove(messageId);
+    }
+
+    // A message someone deleted by hand is already where we are trying to put it.
+    return response.ok || response.status === 404;
+  };
+
   return {
     send,
-    async remove(messageId: string) {
-      await fetch(`${base}/messages/${messageId}`, { method: "DELETE" });
-    },
+    remove,
     split: splitComponents,
     where() {
       place ??= fetch(base)
@@ -80,7 +107,9 @@ export function dryTransport(): Transport {
     async send(_content: Content, messageId?: string) {
       return messageId ?? `dry-${++next}`;
     },
-    async remove() {},
+    async remove() {
+      return true;
+    },
     split: splitComponents,
   };
 }
@@ -130,9 +159,12 @@ export async function deliverOne(
     record(key, { ids: [...ids, ...(held?.ids ?? []).slice(ids.length)], drawn: "" });
   }
 
-  for (const spare of (held?.ids ?? []).slice(parts.length)) await transport.remove(spare);
+  const spares = (held?.ids ?? []).slice(parts.length);
+  const kept: string[] = [];
 
-  record(key, { ids, drawn });
+  for (const spare of spares) if (!(await transport.remove(spare))) kept.push(spare);
+
+  record(key, { ids: [...ids, ...kept], drawn: kept.length > 0 ? "" : drawn });
   return true;
 }
 
@@ -142,9 +174,11 @@ export async function deliverAll(
   held: Map<string, Held>,
   record: Capture = () => {},
   at = "",
-): Promise<{ redrawn: number; removed: number }> {
+  { deletionBudget = Infinity }: { deletionBudget?: number } = {},
+): Promise<{ redrawn: number; removed: number; pending: number }> {
   let redrawn = 0;
   let removed = 0;
+  let pending = 0;
 
   for (const message of composed) {
     const previous = held.get(message.key);
@@ -166,15 +200,36 @@ export async function deliverAll(
     if (changed) redrawn += 1;
   }
 
+  let tried = 0;
+
   for (const [key, previous] of held) {
     if (composed.some((message) => message.key === key)) continue;
 
-    for (const id of previous.ids) await transport.remove(id);
+    if (tried >= deletionBudget) {
+      pending += 1;
+      continue;
+    }
+
+    const left: string[] = [];
+    for (const id of previous.ids) {
+      tried += 1;
+      if (!(await transport.remove(id))) left.push(id);
+    }
+
+    if (left.length > 0) {
+      const kept = { ...previous, ids: left };
+
+      held.set(key, kept);
+      if (left.length !== previous.ids.length) record(key, kept);
+
+      pending += 1;
+      continue;
+    }
 
     held.delete(key);
     record(key, undefined);
     removed += 1;
   }
 
-  return { redrawn, removed };
+  return { redrawn, removed, pending };
 }

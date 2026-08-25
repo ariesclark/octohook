@@ -118,10 +118,12 @@ export function fileTransport(path: string, title: string) {
 
     async remove(messageId: string) {
       const index = messages.findIndex((message) => message.id === messageId);
-      if (index === -1) return;
+      if (index === -1) return true;
 
       messages.splice(index, 1);
       write();
+
+      return true;
     },
   };
 }
