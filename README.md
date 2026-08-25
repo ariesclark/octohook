@@ -1,95 +1,105 @@
 # Octohook
 
-GitHub webhooks rendered for Discord, running on Cloudflare Workers.
+**One message per commit, editing itself live as CI lands.**
 
 ## Why
 
-Discord's built-in GitHub webhook endpoint has problems Discord doesn't intend to fix:
+Discord's built-in `/github` integration loses what matters and repeats the rest. It discards every `workflow_run` ([#6203](https://github.com/discord/discord-api-docs/issues/6203)), rejects every `deployment_status` ([#5283](https://github.com/discord/discord-api-docs/issues/5283)), and declined new events outright: *"We will not be adding any new events at this time, sorry."* The events it does accept arrive one post each, none aware of the others: a push trailed by ten check runs is eleven messages. Meanwhile the cron that broke overnight never appears at all.
 
-- **Discord renders only 18 event types.** It silently discards `workflow_run` events ([discord-api-docs#6203](https://github.com/discord/discord-api-docs/issues/6203)) and rejects `deployment_status` events ([discord-api-docs#5283](https://github.com/discord/discord-api-docs/issues/5283)). Discord's response: **["We will not be adding any new events at this time, sorry."](https://github.com/discord/discord-api-docs/issues/6203#issuecomment-1650544855)**
-- **Rate limits silently drop events.** A burst of activity (a push triggering a dozen check runs) exceeds the limit, and the events you care about vanish without an error.
-- **No narrowing.** GitHub lets you pick event *types*, but not "check runs, except the successful ones": it's all or nothing per type.
-- **One event, one message.** A push and the CI it sets off scatter down the channel as a dozen messages, none of which knows about the others.
+Octohook is a Cloudflare Worker that receives the webhook instead. It renders each Discord message itself: it shows the events Discord drops, collapses a commit's trail into one board, and its filters name what a message is: the run that failed, the cron that broke, rather than when it happened.
 
-Octohook renders every message itself instead of handing the event to Discord, so an event Discord has no drawing for still appears. A commit's CI folds into one message that edits itself as check runs, annotations and deployments arrive. A [Lucene-like query](https://github.com/gajus/liqe) against the full payload decides what gets through.
+## Features
 
-## Usage
+- **One message per commit+CI.** A push, its check runs, annotations, and deployments collapse into a single board that edits itself in place as results arrive.
+- **The events Discord throws away.** `workflow_run` and `deployment_status` both appear ([discord-api-docs#6203](https://github.com/discord/discord-api-docs/issues/6203), [#5283](https://github.com/discord/discord-api-docs/issues/5283)).
+- **Patient under rate limits.** On a limit it waits the seconds Discord names and sends again. Your event arrives late, not never.
+- **Filtering that filters.** `include` and `exclude` parameters, written in [liqe](https://github.com/gajus/liqe#query-syntax) query syntax, decide what the channel draws.
+- **A bad query fails loud.** Refused whole, never half-applied, reported back to GitHub where you can read it.
 
-Take your Discord webhook URL:
+## Quick start
 
-```
-https://discord.com/api/webhooks/<secret>
-```
+1. In your repository (Settings → Webhooks), add a webhook pointed at:
 
-and point your GitHub repository webhook (content type `application/json`) at:
+   ```
+   https://octohook.aries.fyi/<secret>?token=<github-token>
+   ```
 
-```
-https://octohook.aries.fyi/<secret>?token=<github-token>
-```
+2. Set the content type to `application/json`.
+3. Push something. One message appears, and it keeps itself current.
 
-### The token
+## Configuration
 
-> [!WARNING]
-> **The token is visible to anyone with admin on the repository**, since it sits in the webhook URL. Keep it fine-grained, read-only, Actions and Checks alone, on the repositories that hook here.
+### Token
 
-`?token=` is required, and a hook without one is refused with a 400. Three lookups run under it, and no webhook payload carries what they return:
+`?token=` is required. Requests without one get `400`.
 
-- `GET /repos/{owner}/{repo}/actions/runs/{id}` for a run's name, its number, and what triggered it.
-- `GET /repos/{owner}/{repo}/actions/runs?check_suite_id={id}` to find the run behind a check created through the Checks API, which names no run of its own.
-- `GET /repos/{owner}/{repo}/check-runs/{id}/annotations` for the failure messages a board quotes under a job.
+Use a fine-grained personal access token with read access to Actions and Checks. On classic tokens, the `repo` scope works.
 
-A fine-grained personal access token needs read access to Actions and Checks on the repositories the hook covers; a classic token needs `repo`. Make one under Settings, Developer settings, Personal access tokens. A token that can't read one of those endpoints costs you what it would have said: the board draws the run as the payload describes it, with no name, no annotations, and no trigger.
-
-Filters go in the same URL:
-
-```
-https://octohook.aries.fyi/<secret>?token=<github-token>&exclude=sender.type:Bot
-```
-
-### What it draws
-
-Pushes, pull requests, issues, stars, branch and tag deletions, vulnerability alerts, deployment statuses, and the CI board: check runs, workflow runs, their annotations, and the deployments hanging off them.
-
-A run belongs to the event that set it off, so a push and its build are one message. A run nothing in the channel asked for, such as a schedule, a dependency bot, or an issue comment, gets a board of its own. A commit nothing has reported on for 48 hours is let go, measured from when the delivery arrived, so redelivering an old event by hand still draws it.
+> **Warning:** the token travels in the URL. Anyone who can see the webhook, repository admins included, can read it. Keep it fine-grained and read-only.
 
 ### Filtering
 
-The worker adds a `type` field of the form `<event>` or `<event>.<action>` (e.g. `push`, `issues.opened`) to each payload. The `include` and `exclude` query parameters match against the whole payload using [liqe syntax](https://github.com/gajus/liqe#query-syntax):
+A backup job runs every hour. When it passes, nobody reads it. When it fails at 2am, someone needs to. Filters keep the channel quiet until that second case, so what is left in it is worth reading. The same goes for dependency bots opening pull requests all day, and for a workflow whose failures you already watch elsewhere.
+
+Filters are query parameters on the same URL: `?exclude=type:star`.
+
+Queries follow [liqe query syntax](https://github.com/gajus/liqe#query-syntax); the fields live in [`src/policy.ts`](src/policy.ts). Every message carries `repository`, `branch`, `sha` and `type`. `type` is the GitHub event's own name (`push`, `pull_request`, `issues`, `star`, `delete`), or `run` for a CI board. Events add `by` and `bot`: who did it, and whether a bot did it. Runs carry neither; a check-run payload names no actor.
+
+| Run field | What it matches |
+| --- | --- |
+| `trigger` | what set the run off: push, schedule, workflow_dispatch, release |
+| `workflow` | workflow name |
+| `number` | the workflow run's number, like 14244 |
+| `result` | passed, failed, running, skipped, cancelled |
+| `ever` | worst result held so far: a green re-run stays failed |
+| `jobs.total` / `jobs.failed` / `jobs.passed` / `jobs.running` / `jobs.skipped` | job counts |
+| `deployments` / `seconds` | deployment count, elapsed seconds |
+
+Four rules:
+
+1. Each message is judged alone. Hide a push and its CI still stands there as a board, so name the run too.
+2. A query belongs to the repository whose hook carried it, so several repositories can share one channel.
+3. URL-encode the values, spaces as `%20`. Quote a value holding `/` or a space, as in `workflow:"Nightly backup"`, or liqe parses it as a regex.
+4. A query naming an unknown field, or one liqe cannot parse, is refused whole and everything draws until you fix it. Octohook answers `202` and lists the problem under `refused`, visible in the delivery pane of your webhook settings.
+
+#### Examples
+
+**Silence a healthy cron.** A scheduled run says nothing until it breaks, then draws a board that stays up even after someone re-runs it green.
 
 ```
-# only pushes and merged pull requests
-?include=type:push OR (type:pull_request.closed AND pull_request.merged:true)
-
-# everything except bot activity
-?exclude=sender.type:Bot
-
-# drop successful check runs, keep the failures
-?exclude=type:check_run.completed AND check_run.conclusion:success
-
-# only events for the main branch
-?include=ref:"refs/heads/main"
+?exclude=type:run AND trigger:schedule AND ever:passed
 ```
 
-Queries live in the webhook URL, so URL-encode them (spaces as `%20`); GitHub's webhook form won't encode for you. Values containing `/` need quotes, as in the branch example, or liqe reads them as regex delimiters.
+**Only what failed.** The channel sits empty until something needs a person.
 
-The response says whether the event was accepted or dropped, which query ran, and which fields matched.
+```
+?include=result:failed
+```
+
+**Nothing from bots.** The first drops what the bot did. The second also drops the green builds its pushes set off.
+
+```
+?exclude=bot:true
+?exclude=bot:true OR (type:run AND ever:passed)
+```
 
 ## How it works
 
-One [Durable Object](https://developers.cloudflare.com/durable-objects/) holds each Discord channel. A delivery folds into that channel's world, and the object answers GitHub as soon as it has it, since GitHub won't send an event twice once it has a 2xx. An alarm fires 2 seconds later, or 15 seconds into a burst that keeps coming, draws every message the world implies, and rewrites only the ones that changed. On a rate limit the worker waits out `retry-after` and sends again rather than dropping the message.
-
-The worker builds its messages as JSX and renders them to Discord's components with [`@ariesclark/discord-jsx`](packages/discord-jsx), translating GitHub-flavoured Markdown with [`@ariesclark/markdown-jsx`](packages/markdown-jsx). Every phrase lives in `messages/en-US.json`.
+- Every Discord channel gets its own Durable Object (`src/channel.ts`). Events for one channel queue behind each other instead of fighting.
+- GitHub is acked instantly, since it does not resend an event answered `2xx`. An alarm redraws two seconds later, fifteen during bursts, so a push trailed by ten check runs costs one edit, not eleven.
+- Delivery state is retained for 48 hours.
+- Cleanup tolerates Discord being difficult: up to 25 delete attempts per draw, across up to 20 rounds (`src/deliver.ts`).
 
 ## Development
 
-```bash
+```sh
 pnpm install
-pnpm dev
-pnpm test
-pnpm run deploy
+pnpm dev          # local dev server
+pnpm test         # run the tests
+pnpm run deploy   # deploy to Cloudflare
 ```
 
-Deploying needs your own route in place of `octohook.aries.fyi` (see `wrangler.jsonc`).
+Deploying needs your own Cloudflare route in place of `octohook.aries.fyi` (see `wrangler.jsonc`).
 
 ## License
 
