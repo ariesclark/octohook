@@ -1,6 +1,6 @@
 import { parse, test as matches } from "liqe";
 
-import { broke, wrong } from "./verdict.ts";
+import { broke, detailsUnder, warningsUnder, wrong } from "./verdict.ts";
 import type { Note, Run } from "./state.ts";
 
 /** What a message is, to a query. The fields a hook's `include` and `exclude` may name. */
@@ -22,6 +22,11 @@ export type RunSubject = {
   /** The worst it has been, so a re-run going green does not erase that it failed. */
   ever: Result;
   seconds?: number;
+  /** What the board draws under the run: annotations, a job's own summary, deployments. */
+  details: number;
+  /** How many warnings or worse a reader would see, folded the way the board folds them. */
+  annotations: number;
+  /** What it shipped, which is a different question from what it said. */
   deployments: number;
   jobs: { total: number; failed: number; passed: number; running: number; skipped: number };
 };
@@ -50,6 +55,8 @@ const vocabulary = new Set([
   "result",
   "ever",
   "seconds",
+  "details",
+  "annotations",
   "deployments",
   "jobs",
   "jobs.total",
@@ -87,6 +94,8 @@ export function subjectOfRun(run: Run): RunSubject {
   const running = run.jobs.filter(({ conclusion }) => !conclusion).length;
   const skipped = run.jobs.filter(({ conclusion }) => conclusion === "skipped").length;
 
+  const ever: Result = run.alarmed === true || wrong(run) ? "failed" : resultOf(run);
+
   return {
     type: "run",
     repository: run.repository?.full_name ?? run.repository?.name,
@@ -96,8 +105,10 @@ export function subjectOfRun(run: Run): RunSubject {
     workflow: run.run?.name,
     number: run.run?.runNumber,
     result: resultOf(run),
-    ever: run.alarmed === true || wrong(run) ? "failed" : resultOf(run),
+    ever,
     seconds: secondsOf(run),
+    details: detailsUnder(run),
+    annotations: warningsUnder(run),
     deployments: run.deployments.length,
     jobs: {
       total: run.jobs.length,

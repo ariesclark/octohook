@@ -58,6 +58,97 @@ describe("the subject a run presents", () => {
     assert.equal(subjectOfRun(run({ jobs: [], settled: "success", alarmed: true })).ever, "failed");
   });
 
+  test("counts what the board draws under the run", () => {
+    const noted = (level: string) => ({
+      path: "a.ts",
+      startLine: 1,
+      level,
+      title: null,
+      message: "m",
+    });
+    const job = (over = {}) => ({
+      name: "j",
+      url: "u",
+      conclusion: "success",
+      startedAt: null,
+      completedAt: null,
+      ...over,
+    });
+
+    assert.equal(subjectOfRun(run({ jobs: [job()] })).details, 0);
+    assert.equal(
+      subjectOfRun(run({ jobs: [job({ annotations: [noted("warning")] })] })).details,
+      1,
+    );
+    assert.equal(subjectOfRun(run({ jobs: [job({ annotations: [noted("notice")] })] })).details, 0);
+    assert.equal(
+      subjectOfRun(run({ jobs: [job({ output: { title: "2 warnings" } })] })).details,
+      1,
+    );
+    assert.equal(
+      subjectOfRun(
+        run({ jobs: [job()], deployments: [{ id: 1, state: "success", place: "prod" }] }),
+      ).details,
+      1,
+    );
+  });
+
+  test("counts the warnings apart from everything else under the run", () => {
+    const noted = (level: string, message: string) => ({
+      path: "a.ts",
+      startLine: 1,
+      level,
+      title: null,
+      message,
+    });
+
+    const jobs = [
+      {
+        name: "j",
+        url: "u",
+        conclusion: "success",
+        startedAt: null,
+        completedAt: null,
+        annotations: [
+          noted("warning", "deprecated"),
+          noted("failure", "broke"),
+          noted("notice", "fyi"),
+        ],
+        output: { title: "2 warnings" },
+      },
+    ];
+
+    const subject = subjectOfRun(run({ jobs }));
+
+    assert.equal(subject.annotations, 2);
+    assert.equal(subject.details, 3);
+  });
+
+  test("counts what it shipped apart from what it said", () => {
+    const shipped = [{ id: 1, state: "success", place: "prod" }];
+    const subject = subjectOfRun(run({ jobs: [], deployments: shipped }));
+
+    assert.equal(subject.deployments, 1);
+    assert.equal(subject.details, 1);
+    assert.equal(subjectOfRun(run({ jobs: [] })).deployments, 0);
+  });
+
+  test("says the same annotation once, however often it repeats", () => {
+    const same = { path: "a.ts", startLine: 1, level: "warning", title: null, message: "m" };
+    const jobs = [
+      {
+        name: "j",
+        url: "u",
+        conclusion: "success",
+        startedAt: null,
+        completedAt: null,
+        annotations: [same, same, same],
+      },
+    ];
+
+    assert.equal(subjectOfRun(run({ jobs })).details, 1);
+  });
+
   test("counts how its jobs went", () => {
     const subject = subjectOfRun(run());
 
