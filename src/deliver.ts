@@ -126,7 +126,9 @@ export async function deliverOne(
   at = "",
 ): Promise<boolean> {
   const drawn = JSON.stringify(content);
-  if (held?.drawn === drawn) return false;
+
+  // A record with no message id behind it is not a drawn message, whatever it says it drew.
+  if (held?.drawn === drawn && held.ids.length > 0) return false;
 
   const components = (content.components ?? []) as MessageComponent[];
 
@@ -164,7 +166,10 @@ export async function deliverOne(
 
   for (const spare of spares) if (!(await transport.remove(spare))) kept.push(spare);
 
-  record(key, { ids: [...ids, ...kept], drawn: kept.length > 0 ? "" : drawn });
+  // A part Discord would not take leaves nothing to edit, so the next draw must send it again.
+  const sent = ids.length === parts.length && kept.length === 0;
+
+  record(key, { ids: [...ids, ...kept], drawn: sent ? drawn : "" });
   return true;
 }
 
@@ -175,10 +180,12 @@ export async function deliverAll(
   record: Capture = () => {},
   at = "",
   { deletionBudget = Infinity }: { deletionBudget?: number } = {},
-): Promise<{ redrawn: number; removed: number; pending: number }> {
+): Promise<{ redrawn: number; removed: number; pending: number; failed: string[] }> {
   let redrawn = 0;
   let removed = 0;
   let pending = 0;
+
+  const failed: string[] = [];
 
   for (const message of composed) {
     const previous = held.get(message.key);
@@ -198,6 +205,7 @@ export async function deliverAll(
     );
 
     if (changed) redrawn += 1;
+    if (held.get(message.key)?.drawn === "") failed.push(message.key);
   }
 
   let tried = 0;
@@ -231,5 +239,5 @@ export async function deliverAll(
     removed += 1;
   }
 
-  return { redrawn, removed, pending };
+  return { redrawn, removed, pending, failed };
 }

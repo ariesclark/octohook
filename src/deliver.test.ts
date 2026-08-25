@@ -146,6 +146,97 @@ describe("deliverOne, shedding the parts it no longer needs", () => {
   });
 });
 
+describe("deliverOne, when Discord will not take a message", () => {
+  const refusing = (): Transport => ({
+    async send() {
+      return undefined;
+    },
+    async remove() {
+      return true;
+    },
+    split: splitComponents,
+  });
+
+  test("does not call a message drawn when nothing was posted", async () => {
+    const held = new Map<string, Held>();
+    const message = { key: "k", at: "", content: { components: [{ type: 10, content: "hi" }] } };
+
+    await deliverAll([message], refusing(), held, () => {});
+
+    assert.deepEqual(held.get("k")?.ids, []);
+    assert.equal(held.get("k")?.drawn, "");
+  });
+
+  test("draws it on the next pass rather than losing it", async () => {
+    const held = new Map<string, Held>();
+    const message = { key: "k", at: "", content: { components: [{ type: 10, content: "hi" }] } };
+
+    await deliverAll([message], refusing(), held, () => {});
+
+    const sent: string[] = [];
+    const working: Transport = {
+      async send() {
+        sent.push("posted");
+        return "id-1";
+      },
+      async remove() {
+        return true;
+      },
+      split: splitComponents,
+    };
+
+    await deliverAll([message], working, held, () => {});
+
+    assert.deepEqual(sent, ["posted"]);
+    assert.deepEqual(held.get("k")?.ids, ["id-1"]);
+  });
+});
+
+describe("a message the channel thinks it drew", () => {
+  test("draws it again when no message id was ever kept", async () => {
+    const content = { components: [{ type: 10, content: "pushed abc1234" }] };
+    const held = new Map<string, Held>([["k", { ids: [], drawn: JSON.stringify(content) }]]);
+    const sent: string[] = [];
+
+    const transport: Transport = {
+      async send() {
+        sent.push("posted");
+        return "id-1";
+      },
+      async remove() {
+        return true;
+      },
+      split: splitComponents,
+    };
+
+    await deliverAll([{ key: "k", at: "", content }], transport, held, () => {});
+
+    assert.deepEqual(sent, ["posted"]);
+    assert.deepEqual(held.get("k")?.ids, ["id-1"]);
+  });
+
+  test("leaves a message it really did draw alone", async () => {
+    const content = { components: [{ type: 10, content: "pushed abc1234" }] };
+    const held = new Map<string, Held>([["k", { ids: ["id-1"], drawn: JSON.stringify(content) }]]);
+    const sent: string[] = [];
+
+    const transport: Transport = {
+      async send() {
+        sent.push("posted");
+        return "id-1";
+      },
+      async remove() {
+        return true;
+      },
+      split: splitComponents,
+    };
+
+    await deliverAll([{ key: "k", at: "", content }], transport, held, () => {});
+
+    assert.deepEqual(sent, []);
+  });
+});
+
 describe("discordTransport.remove", () => {
   const answers = (responses: Array<{ status: number; body?: unknown }>) => {
     const calls: string[] = [];
