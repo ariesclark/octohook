@@ -401,6 +401,31 @@ describe("a delete Discord will not take", () => {
   });
 });
 
+describe("a run still in flight", () => {
+  const stored = async (object: ReturnType<typeof stub>, key: string) =>
+    runInDurableObject(object, (_instance, state) => state.storage.kv.get(key));
+
+  it("keeps asking what step it is on", async () => {
+    const object = stub();
+
+    await deliver(object, [job(secondsAgo(10), "abc1234", "build", null)]);
+    await runDurableObjectAlarm(object);
+
+    expect(lookups.some(({ url }) => url.includes("/jobs"))).toBe(true);
+    expect(Number(await stored(object, "flushAt"))).toBeGreaterThan(Date.now());
+  });
+
+  it("gives up on a run that never finishes", async () => {
+    const object = stub();
+
+    await deliver(object, [job(secondsAgo(10), "abc1234", "build", null)]);
+    await runInDurableObject(object, (_instance, state) => state.storage.kv.put("watches", 500));
+    await runDurableObjectAlarm(object);
+
+    expect(await stored(object, "watches")).toBeUndefined();
+  });
+});
+
 describe("a repository's query", () => {
   it("keeps out what it names, and lets the rest through", async () => {
     const object = stub();

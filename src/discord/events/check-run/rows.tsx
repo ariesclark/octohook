@@ -12,6 +12,8 @@ export type BoardJob = {
   conclusion: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  /** The step it is on, while it is still on one. */
+  step?: string;
   annotations?: Array<{
     path: string;
     startLine: number;
@@ -66,8 +68,12 @@ function jobTalks(job: BoardJob): boolean {
   );
 }
 
+function running(job: BoardJob): boolean {
+  return !job.conclusion;
+}
+
 function jobSpeaks(job: BoardJob, deployments: BoardDeployment[] = []): boolean {
-  return jobTalks(job) || deploymentsOf(job, deployments).length > 0;
+  return Boolean(running(job) && job.step) || jobTalks(job) || deploymentsOf(job, deployments).length > 0;
 }
 
 function looseDeployments(jobs: BoardJob[], deployments: BoardDeployment[] = []) {
@@ -160,6 +166,7 @@ function Job({
   first,
 }: Rows & { job: BoardJob; first: boolean }) {
   const duration = checkDuration(job.startedAt, job.completedAt);
+  const step = running(job) ? job.step : undefined;
   const said = outputOf(job);
 
   return (
@@ -167,7 +174,7 @@ function Job({
       <Break first={first} />
       {small}
       <a href={job.url}>{job.name}</a>
-      {duration ? ` • ${duration}` : ""}
+      {step ? ` • ${step}` : duration ? ` • ${duration}` : ""}
       {said ? (
         <>
           <br />
@@ -210,7 +217,9 @@ export function runSummary(
     .filter(Boolean)
     .join(", ");
 
-  const duration = checkDuration(ran?.startedAt ?? null, ran?.completedAt ?? null);
+  // A run with work still in it has no length yet, whatever an earlier fold wrote down.
+  const over = jobs.length === 0 || jobs.every(({ conclusion }) => conclusion);
+  const duration = over ? checkDuration(ran?.startedAt ?? null, ran?.completedAt ?? null) : undefined;
   const took = duration ? t("check.took", { duration }) : undefined;
 
   if (!took) return counted;

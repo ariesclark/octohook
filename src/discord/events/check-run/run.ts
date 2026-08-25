@@ -32,10 +32,24 @@ export type Annotation = {
   message: string;
 };
 
+export type ReportedJob = {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  html_url: string;
+  started_at: string | null;
+  completed_at: string | null;
+  steps?: Array<{ name: string; status: string }>;
+};
+
+export type Watched = { etag?: string; jobs?: ReportedJob[] };
+
 export type Github = {
   resolveRun(reference: RunReference): Promise<ResolvedRun | undefined>;
   runReferenceFromSuite(repository: string, suiteId: number): Promise<RunReference | undefined>;
   resolveAnnotations(repository: string, checkRunId: number): Promise<Annotation[]>;
+  /** Undefined jobs means nothing moved: a 304 costs no rate limit. */
+  watchJobs(reference: RunReference, etag?: string): Promise<Watched>;
 };
 
 /** A Durable Object shares its isolate with every other instance of its class. */
@@ -59,6 +73,27 @@ export function createGithub(token?: string): Github {
   }
 
   return {
+    async watchJobs({ repository, runId }: RunReference, etag?: string): Promise<Watched> {
+      if (!token) return {};
+
+      const response = await fetch(
+        `https://api.github.com/repos/${repository}/actions/runs/${runId}/jobs?per_page=100`,
+        {
+          headers: {
+            accept: "application/vnd.github+json",
+            authorization: `Bearer ${token}`,
+            "user-agent": "octohook",
+            ...(etag ? { "if-none-match": etag } : {}),
+          },
+        },
+      );
+
+      if (response.status === 304 || !response.ok) return { etag };
+
+      const { jobs } = (await response.json()) as { jobs: ReportedJob[] };
+      return { etag: response.headers.get("etag") ?? undefined, jobs };
+    },
+
     resolveRun(reference: RunReference): Promise<ResolvedRun | undefined> {
       const key = `${reference.repository}/${reference.runId}`;
       const pending = runs.get(key);

@@ -7,6 +7,7 @@ export type Job = {
   conclusion: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  step?: string;
   annotations?: Annotation[];
   output?: { title?: string; summary?: string };
 };
@@ -35,6 +36,8 @@ export type Run = {
   jobs: Job[];
   deployments: Deployment[];
   settled?: string | null;
+  /** What GitHub last answered the jobs endpoint with, so a poll that moves nothing costs nothing. */
+  etag?: string;
   /** Latched, never cleared: a re-run going green must not delete the message that woke someone. */
   alarmed?: true;
 };
@@ -113,6 +116,16 @@ function repositoryIn(payload: Record<string, unknown>): Repository | undefined 
   if (!repository?.name || !repository.html_url) return undefined;
 
   return { name: repository.name, full_name: repository.full_name, html_url: repository.html_url };
+}
+
+/** The runs still worth asking GitHub about: a job of theirs has not reached a verdict. */
+export function watching(world: World): Run[] {
+  return [...world.runs.values()].filter(
+    (entry) =>
+      entry.repository?.full_name &&
+      entry.jobs.length > 0 &&
+      entry.jobs.some(({ conclusion }) => !conclusion),
+  );
 }
 
 export function forget(world: World, before: string): string[] {
@@ -215,6 +228,53 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     return `suite settled → ${suite.conclusion ?? "no verdict"}`;
   }
 
+  if (event === "workflow_job") {
+    if (!resolved.runId) return "";
+
+    const reported = payload.workflow_job as unknown as {
+      name: string;
+      status: string;
+      conclusion: string | null;
+      html_url: string;
+      started_at: string | null;
+      completed_at: string | null;
+      steps?: Array<{ name: string; status: string }>;
+    };
+
+    const entry = run(world, resolved.runId, at, seen);
+    entry.repository ??= repositoryIn(payload);
+
+    const step =
+      reported.status === "completed"
+        ? undefined
+        : reported.steps?.find(({ status }) => status === "in_progress")?.name;
+
+    const job: Job = {
+      name: reported.name,
+      url: reported.html_url,
+      conclusion: reported.conclusion,
+      startedAt: reported.started_at,
+      completedAt: reported.completed_at,
+      step,
+    };
+
+    const index = entry.jobs.findIndex(({ name }) => name === job.name);
+    if (index === -1) entry.jobs.push(job);
+    else
+      entry.jobs[index] = {
+        ...entry.jobs[index]!,
+        ...job,
+        conclusion: job.conclusion ?? entry.jobs[index]!.conclusion,
+        annotations: entry.jobs[index]!.annotations,
+        output: entry.jobs[index]!.output,
+      };
+
+    latch(entry);
+
+    if (job.conclusion) return `${job.name} → ${job.conclusion}`;
+    return step ? `${job.name} is on ${step}` : `${job.name} is ${reported.status}`;
+  }
+
   if (event === "workflow_run") {
     if (!resolved.runId) return "";
 
@@ -239,7 +299,8 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.sha ??= workflow.head_sha;
     entry.branch ??= workflow.head_branch;
     entry.startedAt ??= workflow.run_started_at;
-    entry.completedAt = workflow.updated_at;
+    // `updated_at` moves while the run is going, so it only reads as an end once there is a verdict.
+    entry.completedAt = workflow.conclusion ? workflow.updated_at : undefined;
     entry.settled = workflow.conclusion;
     latch(entry);
 

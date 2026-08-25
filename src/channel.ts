@@ -7,7 +7,15 @@ import type { Folded } from "./foldable.ts";
 import type { HookScope } from "./discord/refs";
 import type { Query } from "./policy.ts";
 import { resolveFor } from "./resolve.ts";
-import { apply, forget, type Note, type Repository, type Run, type World } from "./state.ts";
+import {
+  apply,
+  forget,
+  watching,
+  type Note,
+  type Repository,
+  type Run,
+  type World,
+} from "./state.ts";
 
 type Meta = {
   secret: string;
@@ -27,6 +35,12 @@ const drainAfter = 30_000;
 
 /** Discord may never take a message back. Stop asking rather than ask forever. */
 const maximumDrains = 20;
+
+/** How often a run still in flight is asked what step it is on. */
+const watchEvery = 5_000;
+
+/** A run whose finish never arrives would otherwise be asked about forever. */
+const maximumWatches = 240;
 
 export type Outcome = {
   changed: string[];
@@ -163,7 +177,24 @@ export class Channel extends DurableObject<CloudflareBindings> {
     for (const [key] of kv.list({ prefix: "query:" }))
       if (!speaking.has(key.slice("query:".length))) kv.delete(key);
 
+    const moved = await this.#watch(world);
+    if (moved) for (const [id, entry] of world.runs) kv.put(`run:${id}`, entry);
+
     const { revision: drawn, pending } = await this.#draw(world);
+
+    if (watching(world).length > 0 && this.#token) {
+      const watches = (kv.get<number>("watches") ?? 0) + 1;
+
+      if (watches <= maximumWatches) {
+        kv.put("watches", watches);
+        kv.put("flushAt", Date.now() + watchEvery);
+        await this.ctx.storage.setAlarm(Date.now() + watchEvery);
+
+        return;
+      }
+    }
+
+    kv.delete("watches");
 
     if (pending > 0) {
       const drains = (kv.get<number>("drains") ?? 0) + 1;
@@ -193,6 +224,43 @@ export class Channel extends DurableObject<CloudflareBindings> {
     }
 
     await this.ctx.storage.setAlarm(kv.get<number>("flushAt") ?? Date.now());
+  }
+
+  /** Asks GitHub what each unfinished run is doing, and folds the answer in like a delivery. */
+  async #watch(world: World): Promise<boolean> {
+    const runs = watching(world);
+    if (runs.length === 0) return false;
+
+    if (!this.#token) return false;
+
+    const github = this.#githubFor(this.#token);
+    let moved = false;
+
+    for (const entry of runs) {
+      const repository = entry.repository!.full_name!;
+      const { etag, jobs } = await github.watchJobs({ repository, runId: entry.id }, entry.etag);
+
+      entry.etag = etag;
+      if (!jobs) continue;
+
+      for (const job of jobs) {
+        const said = apply(
+          world,
+          {
+            event: "workflow_job",
+            action: job.status,
+            delivered_at: entry.at,
+            received_at: new Date().toISOString(),
+            payload: { repository: entry.repository, workflow_job: job } as Record<string, unknown>,
+          },
+          { runId: entry.id },
+        );
+
+        if (said) moved = true;
+      }
+    }
+
+    return moved;
   }
 
   async #draw(world: World): Promise<{ revision: number | undefined; pending: number }> {

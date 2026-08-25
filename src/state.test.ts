@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { Delivery, Note } from "./state.ts";
-import { apply, emptyWorld, forget, ownerOf } from "./state.ts";
+import { apply, emptyWorld, forget, ownerOf, watching } from "./state.ts";
 
 function delivery(event: string, action: string | null, payload: object, at = "01:00"): Delivery {
   return { event, action, delivered_at: at, payload: payload as Record<string, never> };
@@ -247,6 +247,83 @@ describe("apply", () => {
     assert.equal(world.runs.get("14244")!.alarmed, true);
   });
 
+  test("does not time a run that is still going", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("workflow_run", "in_progress", workflowRun(null, { status: "in_progress" })),
+      { runId: "14244" },
+    );
+
+    const entry = world.runs.get("14244")!;
+
+    assert.equal(entry.startedAt, "2026-08-24T01:00:00Z");
+    assert.equal(entry.completedAt, undefined);
+  });
+
+  test("takes back a clock a run has outgrown", () => {
+    const world = emptyWorld();
+    apply(world, delivery("workflow_run", "completed", workflowRun("success")), { runId: "14244" });
+
+    assert.equal(world.runs.get("14244")!.completedAt, "2026-08-24T01:00:17Z");
+
+    apply(world, delivery("workflow_run", "in_progress", workflowRun(null)), { runId: "14244" });
+
+    assert.equal(world.runs.get("14244")!.completedAt, undefined);
+  });
+
+  test("remembers which step a job is on", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "created", checkRun("build", null)), { runId: "14244" });
+
+    const changed = apply(
+      world,
+      delivery("workflow_job", "in_progress", {
+        workflow_job: {
+          run_id: 14244,
+          name: "build",
+          status: "in_progress",
+          conclusion: null,
+          html_url: "https://github.com/o/r/actions/runs/14244/job/1",
+          started_at: "2026-08-24T01:00:00Z",
+          completed_at: null,
+          steps: [
+            { name: "Set up job", number: 1, status: "completed", conclusion: "success" },
+            { name: "Run pnpm install", number: 2, status: "in_progress", conclusion: null },
+          ],
+        },
+      }),
+      { runId: "14244" },
+    );
+
+    assert.equal(changed, "build is on Run pnpm install");
+    assert.equal(world.runs.get("14244")!.jobs[0]!.step, "Run pnpm install");
+  });
+
+  test("forgets the step once the job is done with it", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "created", checkRun("build", null)), { runId: "14244" });
+
+    apply(
+      world,
+      delivery("workflow_job", "completed", {
+        workflow_job: {
+          run_id: 14244,
+          name: "build",
+          status: "completed",
+          conclusion: "success",
+          html_url: "https://github.com/o/r/actions/runs/14244/job/1",
+          started_at: "2026-08-24T01:00:00Z",
+          completed_at: "2026-08-24T01:00:20Z",
+          steps: [{ name: "Set up job", number: 1, status: "completed", conclusion: "success" }],
+        },
+      }),
+      { runId: "14244" },
+    );
+
+    assert.equal(world.runs.get("14244")!.jobs[0]!.step, undefined);
+  });
+
   test("remembers a push against the commit it landed", () => {
     const world = emptyWorld();
     const changed = apply(world, delivery("push", null, { after: "abc1234" }), {
@@ -289,6 +366,46 @@ describe("apply", () => {
     assert.equal(changed, "");
     assert.equal(world.runs.size, 0);
     assert.equal(world.notes.length, 0);
+  });
+});
+
+describe("watching", () => {
+  const somewhere = { name: "r", full_name: "o/r", html_url: "https://github.com/o/r" };
+
+  test("watches a run whose job has not finished", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("check_run", "created", { ...checkRun("build", null), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual(
+      watching(world).map(({ id }) => id),
+      ["14244"],
+    );
+  });
+
+  test("stops watching once every job has a verdict", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("check_run", "completed", { ...checkRun("build", "success"), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual(watching(world), []);
+  });
+
+  test("does not watch a run nothing has reported a job for", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("workflow_run", "completed", { ...workflowRun(null), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual(watching(world), []);
   });
 });
 
