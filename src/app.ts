@@ -5,6 +5,7 @@ import { getWebhookRequest } from "./discord";
 import type { Batch } from "./channel.ts";
 import { factsOf, foldablePayload, shaOf, type Folded } from "./foldable.ts";
 import { withoutUploads } from "./uploads.ts";
+import { avatarSources, compositeAuthorAvatars } from "./avatars";
 import { occurredAt } from "./occurred";
 import { optionsMiddleware, unreadable } from "./options";
 import { localReferenceFor } from "./resolve.ts";
@@ -12,6 +13,19 @@ import { localReferenceFor } from "./resolve.ts";
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 app.get("/", ({ redirect }) => redirect("https://github.com/ariesclark/octohook"));
+
+/** Discord will not carry a file for a message the channel keeps, so it fetches one instead. */
+app.get("/avatars", async ({ req, json, newResponse }) => {
+  const sources = avatarSources(new URL(req.url));
+  if (sources.length === 0) return json({ message: "No GitHub avatar asked for." }, 400);
+
+  const drawn = await compositeAuthorAvatars(sources);
+
+  return newResponse(drawn as unknown as ArrayBuffer, 200, {
+    "content-type": "image/png",
+    "cache-control": "public, max-age=31536000, immutable",
+  });
+});
 
 async function contentOf(request: Request): Promise<unknown> {
   return request.headers.get("content-type")?.startsWith("application/json")

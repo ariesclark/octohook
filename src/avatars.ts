@@ -97,3 +97,32 @@ export async function compositeAuthorAvatars(urls: string[]): Promise<Uint8Array
 
   return canvas.get_bytes();
 }
+
+/** GitHub is the only place the worker will fetch a face from, asked or not. */
+const avatarHost = "avatars.githubusercontent.com";
+
+const mostFaces = 4;
+
+export function avatarSources(asked: URL): string[] {
+  return asked.searchParams
+    .getAll("u")
+    .filter((url) => {
+      try {
+        const { protocol, hostname } = new URL(url);
+        return protocol === "https:" && hostname === avatarHost;
+      } catch {
+        return false;
+      }
+    })
+    .slice(0, mostFaces);
+}
+
+/** One face needs no drawing; several are drawn into one by the worker, and cached by Discord. */
+export function compositeUrl(origin: string, urls: string[]): string {
+  if (urls.length <= 1) return urls[0] ?? "";
+
+  const asked = new URL("/avatars", origin);
+  for (const url of urls.slice(0, mostFaces)) asked.searchParams.append("u", url);
+
+  return asked.toString();
+}

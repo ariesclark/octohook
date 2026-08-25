@@ -46,8 +46,9 @@ export async function PushMessage({
       </message>
     );
 
-  const { files, url } = await avatarThumbnail(
+  const { url } = avatarThumbnail(
     others.slice(0, thumbnailAuthors).map((username) => authorAvatarUrl(event, username)),
+    (event as { origin?: string }).origin,
   );
 
   const taken = besideThumbnail(event.commits, {
@@ -58,7 +59,7 @@ export async function PushMessage({
   });
 
   return (
-    <message {...identity} files={files}>
+    <message {...identity}>
       <section accessory={<thumbnail media={{ url }} />}>
         <text>{headline}</text>
         {group(lines.slice(0, taken))}

@@ -50,7 +50,9 @@ export const optionsMiddleware = createMiddleware<{
   const event = {
     ...body,
     type: `${name}${action ? `.${action}` : ""}`,
-  } as GithubEvent;
+    // Where a drawn message can reach this worker back, for anything Discord has to fetch.
+    origin: new URL(req.url).origin,
+  } as unknown as GithubEvent;
 
   // Absent on older deliveries and on replays.
   const target = req.header("x-github-hook-installation-target-type");

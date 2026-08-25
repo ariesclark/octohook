@@ -7,10 +7,22 @@ let channel = "";
 beforeEach(() => {
   channel = `hook-${++nth}`;
 
-  vi.stubGlobal("fetch", async (input: RequestInfo) => {
-    const url = typeof input === "string" ? input : (input as Request).url;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const url = input instanceof Request ? input.url : String(input);
 
     if (url.startsWith("https://api.github.com")) return new Response(null, { status: 404 });
+
+    if (url.startsWith("https://avatars.githubusercontent.com"))
+      return new Response(
+        Uint8Array.from(
+          atob(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          ),
+          (character) => character.charCodeAt(0),
+        ),
+        { headers: { "content-type": "image/png" } },
+      );
+
     return Response.json({ id: "message-1" });
   });
 });
@@ -74,5 +86,29 @@ describe("a hook without a token", () => {
       drawAt: expect.any(Number),
       holding: { runs: 0, notes: 1, drawn: 0 },
     });
+  });
+});
+
+describe("the avatars the worker draws", () => {
+  const face = (id: number) => `https://avatars.githubusercontent.com/u/${id}?v=4`;
+
+  it("refuses to fetch anywhere but GitHub", async () => {
+    const asked = encodeURIComponent("https://example.com/pic.png");
+    const response = await SELF.fetch(`https://octohook.test/avatars?u=${asked}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("refuses when it is asked for no one", async () => {
+    expect((await SELF.fetch("https://octohook.test/avatars")).status).toBe(400);
+  });
+
+  it("draws the faces it was given, and lets them be cached", async () => {
+    const asked = [face(1), face(2)].map((url) => `u=${encodeURIComponent(url)}`).join("&");
+    const response = await SELF.fetch(`https://octohook.test/avatars?${asked}`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("cache-control")).toContain("immutable");
   });
 });
