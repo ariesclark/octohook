@@ -9,7 +9,8 @@ import { strangeFields, type Query } from "./policy.ts";
  * sentence. It expands to exactly the text below, and the 202 says so.
  */
 export const presets: Record<string, string> = {
-  recommended: "type:run AND ever:passed AND details:0",
+  recommended:
+    "type:run AND (ever:passed OR ever:skipped OR ever:cancelled) AND details:0",
 };
 
 export function queryOf({

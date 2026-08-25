@@ -3,6 +3,15 @@ import { describe, test } from "node:test";
 
 import { presets, queryOf, unreadable } from "./options.ts";
 
+describe("what the recommended default keeps out", () => {
+  const named = presets.recommended!;
+
+  test("says nothing about work that never ran", () => {
+    assert.match(named, /ever:skipped/);
+    assert.match(named, /ever:cancelled/);
+  });
+});
+
 describe("a named default", () => {
   test("stands in for the query it spells out", () => {
     assert.deepEqual(queryOf({ preset: "recommended" }), {
