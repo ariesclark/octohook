@@ -1,8 +1,28 @@
-import type { Delivery } from "./state.ts";
+import type { Delivery, Facts } from "./state.ts";
 
 export type Folded = Delivery & {
   content?: unknown;
 };
+
+/** Read where the whole event still exists, since the fold keeps none of it. */
+export function factsOf(payload: Payload): Facts | undefined {
+  const sender = payload.sender as { login?: string; type?: string } | undefined;
+  const pull = payload.pull_request as { merged?: boolean; draft?: boolean } | undefined;
+
+  const ref = ((payload.ref ?? payload.base_ref) as string | undefined)?.replace(
+    /^refs\/(heads|tags)\//,
+    "",
+  );
+
+  const facts: Facts = {
+    sender: sender?.login ? { login: sender.login, type: sender.type } : undefined,
+    ref: ref ?? (payload.pull_request as { head?: { ref?: string } } | undefined)?.head?.ref,
+    merged: pull?.merged,
+    draft: pull?.draft,
+  };
+
+  return Object.values(facts).some((value) => value !== undefined) ? facts : undefined;
+}
 
 type Payload = Record<string, unknown>;
 

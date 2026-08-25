@@ -3,9 +3,9 @@ import { Hono } from "hono";
 
 import { getWebhookRequest } from "./discord";
 import type { Batch } from "./channel.ts";
-import { foldablePayload, shaOf, type Folded } from "./foldable.ts";
+import { factsOf, foldablePayload, shaOf, type Folded } from "./foldable.ts";
 import { occurredAt } from "./occurred";
-import { optionsMiddleware } from "./options";
+import { optionsMiddleware, unreadable } from "./options";
 import { localReferenceFor } from "./resolve.ts";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
@@ -35,6 +35,7 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
 
   const event = get("event");
   const hook = get("hook");
+  const query = get("query");
 
   const token = req.query("token");
   if (!token)
@@ -52,6 +53,7 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
     action: "action" in event ? String(event.action) : null,
     delivered_at: new Date(at ?? Date.now()).toISOString(),
     received_at: new Date().toISOString(),
+    facts: factsOf(payload),
     payload: foldablePayload(name, payload),
   };
 
@@ -65,10 +67,20 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
       secret,
       hook,
       token,
+      query,
       deliveries: [delivery],
     });
 
-    return json({ message: "Event accepted.", ...outcome }, { status: 202 });
+    const refused = unreadable(query);
+
+    return json(
+      {
+        message: "Event accepted.",
+        ...outcome,
+        ...(refused.length > 0 ? { refused } : {}),
+      },
+      { status: 202 },
+    );
   } catch (error) {
     return json(
       { message: "The channel would not take it.", reason: String(error) },

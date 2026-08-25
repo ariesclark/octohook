@@ -5,6 +5,7 @@ import { createGithub, type Github } from "./discord/events/check-run/run.ts";
 import { deliverAll, discordTransport, type Held } from "./deliver.ts";
 import type { Folded } from "./foldable.ts";
 import type { HookScope } from "./discord/refs";
+import type { Query } from "./policy.ts";
 import { resolveFor } from "./resolve.ts";
 import { apply, forget, type Note, type Repository, type Run, type World } from "./state.ts";
 
@@ -20,6 +21,13 @@ const maximumWait = 15_000;
 
 const retention = 48 * 60 * 60 * 1000;
 
+const deletionBudget = 25;
+
+const drainAfter = 30_000;
+
+/** Discord may never take a message back. Stop asking rather than ask forever. */
+const maximumDrains = 20;
+
 export type Outcome = {
   changed: string[];
   revision: number;
@@ -30,6 +38,7 @@ export type Batch = {
   secret: string;
   hook: HookScope;
   token?: string;
+  query?: Query;
   deliveries: Folded[];
 };
 
@@ -47,7 +56,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
   }
 
   /** A Durable Object's input gate opens on every `await`, so lookups happen before the fold. */
-  async deliver({ secret, hook, token, deliveries }: Batch): Promise<Outcome> {
+  async deliver({ secret, hook, token, query, deliveries }: Batch): Promise<Outcome> {
     const github = this.#githubFor(token);
     const resolved = [];
 
@@ -76,7 +85,16 @@ export class Channel extends DurableObject<CloudflareBindings> {
 
     for (const [delivery, values] of resolved) {
       changed.push(apply(world, delivery, values));
-      last = (delivery.payload.repository as Repository | undefined) ?? last;
+
+      const where = delivery.payload.repository as Repository | undefined;
+      last = where ?? last;
+
+      // A repository's own hook says what its channel draws, so the last delivery for it wins.
+      const named = where?.full_name ?? where?.name;
+      if (!named) continue;
+
+      if (query?.include || query?.exclude) kv.put(`query:${named}`, query);
+      else kv.delete(`query:${named}`);
     }
 
     const pendingSince = kv.get<number>("pendingSince") ?? now;
@@ -135,7 +153,38 @@ export class Channel extends DurableObject<CloudflareBindings> {
 
     kv.put("notes", world.notes);
 
-    const drawn = await this.#draw(world);
+    // A query outlives nothing: once the channel holds nothing from a repository, neither does it.
+    const speaking = new Set(
+      [...world.runs.values(), ...world.notes]
+        .map(({ repository }) => repository?.full_name ?? repository?.name)
+        .filter(Boolean),
+    );
+
+    for (const [key] of kv.list({ prefix: "query:" }))
+      if (!speaking.has(key.slice("query:".length))) kv.delete(key);
+
+    const { revision: drawn, pending } = await this.#draw(world);
+
+    if (pending > 0) {
+      const drains = (kv.get<number>("drains") ?? 0) + 1;
+
+      if (drains <= maximumDrains) {
+        const waiting = kv.get<number>("flushAt") ?? 0;
+        const drainAt =
+          waiting > Date.now()
+            ? Math.min(waiting, Date.now() + drainAfter)
+            : Date.now() + drainAfter;
+
+        kv.put("drains", drains);
+        kv.put("flushAt", drainAt);
+        kv.delete("pendingSince");
+
+        await this.ctx.storage.setAlarm(drainAt);
+        return;
+      }
+    }
+
+    kv.delete("drains");
 
     if (kv.get<number>("revision") === drawn) {
       kv.delete("flushAt");
@@ -146,11 +195,11 @@ export class Channel extends DurableObject<CloudflareBindings> {
     await this.ctx.storage.setAlarm(kv.get<number>("flushAt") ?? Date.now());
   }
 
-  async #draw(world: World): Promise<number | undefined> {
+  async #draw(world: World): Promise<{ revision: number | undefined; pending: number }> {
     const { kv } = this.ctx.storage;
 
     const meta = kv.get<Meta>("meta");
-    if (!meta) return kv.get<number>("revision");
+    if (!meta) return { revision: kv.get<number>("revision"), pending: 0 };
 
     const revision = kv.get<number>("revision");
 
@@ -158,16 +207,22 @@ export class Channel extends DurableObject<CloudflareBindings> {
     for (const [key, value] of kv.list<Held>({ prefix: "sent:" }))
       held.set(key.slice("sent:".length), value);
 
-    await deliverAll(
-      compose(world, meta.repository, meta.hook),
+    const queries = new Map<string, Query>();
+    for (const [key, value] of kv.list<Query>({ prefix: "query:" }))
+      queries.set(key.slice("query:".length), value);
+
+    const { pending } = await deliverAll(
+      compose(world, meta.repository, meta.hook, queries),
       discordTransport(meta.secret),
       held,
       (key, value) => {
         if (value) kv.put(`sent:${key}`, value);
         else kv.delete(`sent:${key}`);
       },
+      "",
+      { deletionBudget },
     );
 
-    return revision;
+    return { revision, pending };
   }
 }

@@ -10,6 +10,7 @@ import { workflowName } from "./discord/events/workflow-run/shared";
 import type { HookScope } from "./discord/refs";
 import { isFoldable } from "./foldable.ts";
 import { mergeAdjacent } from "./merge.ts";
+import { drawn, subjectOfNote, subjectOfRun, type Query, type Subject } from "./policy.ts";
 import { ownerOf, type Repository, type Run, type World } from "./state.ts";
 
 export type Composed = {
@@ -48,8 +49,20 @@ function toBoard(run: Run): Board & { runId: string } {
   };
 }
 
-export function compose(world: World, repository: Repository, hook?: HookScope): Composed[] {
+export function compose(
+  world: World,
+  repository: Repository,
+  hook?: HookScope,
+  queries?: Map<string, Query>,
+): Composed[] {
   const composed: Composed[] = [];
+
+  const asked = (where: Repository | undefined, subject: Subject) => {
+    const name = where?.full_name ?? where?.name;
+    if (!name) return true;
+
+    return drawn(queries?.get(name) ?? {}, subject);
+  };
 
   const owner = new Map<string, string>();
   const claimed = new Set<string>();
@@ -62,13 +75,22 @@ export function compose(world: World, repository: Repository, hook?: HookScope):
     claimed.add(run.id);
   }
 
+  const standalone: Run[] = [];
+
   for (const note of world.notes) {
     const runs = [...world.runs.values()]
       .filter((run) => owner.get(run.id) === note.key)
+      .filter((run) => asked(run.repository, subjectOfRun(run)))
       .sort(
         (left, right) =>
           ranked(left).localeCompare(ranked(right)) || named(left).localeCompare(named(right)),
       );
+
+    // A run the query keeps outlives the note it belonged to, rather than going down with it.
+    if (!asked(note.repository, subjectOfNote(note))) {
+      standalone.push(...runs);
+      continue;
+    }
 
     if (runs.length === 0) {
       composed.push({
@@ -99,7 +121,9 @@ export function compose(world: World, repository: Repository, hook?: HookScope):
   }
 
   for (const run of world.runs.values()) {
-    if (claimed.has(run.id)) continue;
+    if (claimed.has(run.id)) {
+      if (!standalone.includes(run)) continue;
+    } else if (!asked(run.repository, subjectOfRun(run))) continue;
 
     composed.push({
       key: `run:${run.id}`,

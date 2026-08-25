@@ -50,6 +50,19 @@ describe("a hook without a token", () => {
     expect((await deliver("?token=a-token")).status).toBe(202);
   });
 
+  it("takes an event a query will keep out of the channel anyway", async () => {
+    const response = await deliver("?token=a-token&exclude=kind:star");
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({ changed: ["noted star.created"] });
+  });
+
+  it("says which words of a query it could not read", async () => {
+    const response = await deliver("?token=a-token&exclude=check_run.conclusion:success");
+
+    expect(await response.json()).toMatchObject({ refused: ["check_run.conclusion"] });
+  });
+
   it("says what the fold made of it", async () => {
     const response = await deliver("?token=a-token");
 

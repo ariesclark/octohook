@@ -1,4 +1,5 @@
 import type { Annotation, ResolvedRun } from "./discord/events/check-run/run.ts";
+import { wrong } from "./verdict.ts";
 
 export type Job = {
   name: string;
@@ -34,6 +35,16 @@ export type Run = {
   jobs: Job[];
   deployments: Deployment[];
   settled?: string | null;
+  /** Latched, never cleared: a re-run going green must not delete the message that woke someone. */
+  alarmed?: true;
+};
+
+/** What the rendering knew and the folded payload no longer carries. */
+export type Facts = {
+  sender?: { login?: string; type?: string };
+  ref?: string;
+  merged?: boolean;
+  draft?: boolean;
 };
 
 export type Note = {
@@ -43,6 +54,7 @@ export type Note = {
   kind: string;
   repository?: Repository;
   sha?: string;
+  facts?: Facts;
   content: unknown;
 };
 
@@ -68,6 +80,7 @@ export type Delivery = {
   action: string | null;
   delivered_at: string;
   received_at?: string;
+  facts?: Facts;
   payload: Record<string, unknown>;
 };
 
@@ -89,6 +102,10 @@ function run(world: World, id: string, at: string, seen: string): Run {
   world.runs.set(id, created);
 
   return created;
+}
+
+function latch(entry: Run): void {
+  if (wrong(entry)) entry.alarmed = true;
 }
 
 function repositoryIn(payload: Record<string, unknown>): Repository | undefined {
@@ -164,6 +181,8 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     const index = entry.jobs.findIndex(({ name }) => name === job.name);
     if (index === -1) {
       entry.jobs.push(job);
+      latch(entry);
+
       return `added job ${job.name} → ${job.conclusion ?? "running"}`;
     }
 
@@ -171,6 +190,8 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     if (!job.conclusion && entry.jobs[index]!.conclusion) return "";
 
     entry.jobs[index] = { ...job, annotations: job.annotations ?? entry.jobs[index]!.annotations };
+    latch(entry);
+
     return `updated job ${job.name} → ${job.conclusion ?? "running"}`;
   }
 
@@ -189,6 +210,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.sha ??= suite.head_sha;
     entry.branch ??= suite.head_branch;
     entry.settled = suite.conclusion;
+    latch(entry);
 
     return `suite settled → ${suite.conclusion ?? "no verdict"}`;
   }
@@ -219,6 +241,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.startedAt ??= workflow.run_started_at;
     entry.completedAt = workflow.updated_at;
     entry.settled = workflow.conclusion;
+    latch(entry);
 
     return `run settled → ${workflow.conclusion ?? "no verdict"}`;
   }
@@ -264,10 +287,14 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     const index = entry.deployments.findIndex(({ id }) => id === next.id);
     if (index === -1) {
       entry.deployments.push(next);
+      latch(entry);
+
       return `opened deployment ${next.id} → ${next.state} at ${place}`;
     }
 
     entry.deployments[index] = next;
+    latch(entry);
+
     return `updated deployment ${next.id} → ${next.state} at ${place}`;
   }
 
@@ -288,6 +315,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       kind: event,
       repository: repositoryIn(payload),
       sha,
+      facts: delivery.facts,
       content: resolved.content,
     };
 

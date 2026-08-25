@@ -59,8 +59,12 @@ beforeEach(() => {
 
 const stub = (name = channel) => env.CHANNEL.getByName(name);
 
-const deliver = (object: ReturnType<typeof stub>, deliveries: Folded[], to = secret) =>
-  object.deliver({ secret: to, hook: "organization", token, deliveries });
+const deliver = (
+  object: ReturnType<typeof stub>,
+  deliveries: Folded[],
+  to = secret,
+  query?: { include?: string; exclude?: string },
+) => object.deliver({ secret: to, hook: "organization", token, query, deliveries });
 
 const secondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
 
@@ -344,5 +348,133 @@ describe("Channel", () => {
       expect(keys).toContain("run:900");
       expect(keys).not.toContain("world");
     });
+  });
+});
+
+describe("a delete Discord will not take", () => {
+  const refuse = () => {
+    const inner = globalThis.fetch as typeof fetch;
+
+    vi.stubGlobal("fetch", async (input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+
+      if (init?.method === "DELETE" && url.includes("discord.com")) {
+        calls.push({ method: "DELETE", url, body: {} });
+        return new Response(null, { status: 500 });
+      }
+
+      return inner(input, init);
+    });
+  };
+
+  const stored = async (object: ReturnType<typeof stub>, key: string) =>
+    runInDurableObject(object, (_instance, state) => state.storage.kv.get(key));
+
+  it("keeps the message on the books and comes back for it", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    await runDurableObjectAlarm(object);
+    refuse();
+
+    await deliver(object, [push(secondsAgo(20), "def5678")], secret, { exclude: "type:push" });
+    await runDurableObjectAlarm(object);
+
+    expect(deletes().length).toBeGreaterThan(0);
+    expect(await stored(object, "drains")).toBe(1);
+    expect(await stored(object, "pendingSince")).toBeUndefined();
+    expect(Number(await stored(object, "flushAt"))).toBeGreaterThan(Date.now());
+  });
+
+  it("stops coming back once it has tried long enough", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    await runDurableObjectAlarm(object);
+    refuse();
+
+    await runInDurableObject(object, (_instance, state) => state.storage.kv.put("drains", 40));
+    await deliver(object, [push(secondsAgo(20), "def5678")], secret, { exclude: "type:push" });
+    await runDurableObjectAlarm(object);
+
+    expect(await stored(object, "drains")).toBeUndefined();
+  });
+});
+
+describe("a repository's query", () => {
+  it("keeps out what it names, and lets the rest through", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")], secret, { exclude: "type:push" });
+    await runDurableObjectAlarm(object);
+
+    expect(posts()).toHaveLength(0);
+  });
+
+  it("keeps out a bot the rendering saw, though the fold did not keep it", async () => {
+    const object = stub();
+    const pushed = {
+      ...push(secondsAgo(30), "abc1234"),
+      facts: { sender: { login: "renovate[bot]", type: "Bot" } },
+    };
+
+    await deliver(object, [pushed], secret, { exclude: "bot:true" });
+    await runDurableObjectAlarm(object);
+
+    expect(posts()).toHaveLength(0);
+  });
+
+  it("takes down what it stops drawing", async () => {
+    const object = stub();
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")]);
+    await runDurableObjectAlarm(object);
+
+    expect(posts()).toHaveLength(1);
+
+    await deliver(object, [push(secondsAgo(20), "def5678")], secret, { exclude: "type:push" });
+    await runDurableObjectAlarm(object);
+
+    expect(deletes()).toHaveLength(1);
+  });
+
+  it("is forgotten once nothing in the channel is from that repository", async () => {
+    const object = stub();
+    const old = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+
+    await deliver(object, [push(old, "abc1234", old)], secret, { exclude: "type:issues" });
+    await runDurableObjectAlarm(object);
+
+    expect(
+      await runInDurableObject(object, (_instance, state) =>
+        state.storage.kv.get("query:flirtual/flirtual"),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("speaks only for the repository whose hook carried it", async () => {
+    const object = stub();
+    const other = {
+      name: "wiki-bot",
+      full_name: "flirtual/wiki-bot",
+      html_url: "https://github.com/flirtual/wiki-bot",
+    };
+
+    await deliver(object, [push(secondsAgo(30), "abc1234")], secret, { exclude: "type:push" });
+    await deliver(
+      object,
+      [
+        {
+          ...push(secondsAgo(25), "def5678"),
+          payload: { repository: other, after: "def5678" },
+        },
+      ],
+      secret,
+    );
+
+    await runDurableObjectAlarm(object);
+
+    expect(posts()).toHaveLength(1);
+    expect(lines(posts()[0]!)).toContain("pushed def5678");
   });
 });

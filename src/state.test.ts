@@ -213,6 +213,40 @@ describe("apply", () => {
     });
   });
 
+  test("remembers that a run went wrong once, however green it goes after", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "completed", checkRun("build", "failure")), {
+      runId: "14244",
+    });
+
+    assert.equal(world.runs.get("14244")!.alarmed, true);
+
+    apply(world, delivery("check_run", "completed", checkRun("build", "success")), {
+      runId: "14244",
+    });
+
+    assert.equal(world.runs.get("14244")!.alarmed, true);
+  });
+
+  test("leaves a run that never went wrong unmarked", () => {
+    const world = emptyWorld();
+    apply(world, delivery("check_run", "completed", checkRun("build", "success")), {
+      runId: "14244",
+    });
+    apply(world, delivery("workflow_run", "completed", workflowRun("success")), { runId: "14244" });
+
+    assert.equal(world.runs.get("14244")!.alarmed, undefined);
+  });
+
+  test("marks a run its own verdict condemns", () => {
+    const world = emptyWorld();
+    apply(world, delivery("workflow_run", "completed", workflowRun("timed_out")), {
+      runId: "14244",
+    });
+
+    assert.equal(world.runs.get("14244")!.alarmed, true);
+  });
+
   test("remembers a push against the commit it landed", () => {
     const world = emptyWorld();
     const changed = apply(world, delivery("push", null, { after: "abc1234" }), {

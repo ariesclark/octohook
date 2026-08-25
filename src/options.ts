@@ -1,63 +1,29 @@
-import { highlight, parse, test } from "liqe";
 import invariant from "invariant";
 import { createMiddleware } from "hono/factory";
 import type { GithubEvent, GithubEventPayload } from "./github";
 import type { HookScope } from "./discord/refs";
+import { strangeFields, type Query } from "./policy.ts";
 
-type Options = {
-  include?: string;
-  exclude?: string;
-};
-
-const defaultOptions: Options = {};
-
-export function getQuery({ include, exclude }: Options) {
-  const { include: defaultInclude, exclude: defaultExclude } = defaultOptions;
-
-  if (defaultExclude) exclude = exclude ? `((${exclude}) OR (${defaultExclude}))` : defaultExclude;
-  if (defaultInclude) include = include ? `((${include}) AND (${defaultInclude}))` : defaultInclude;
-
-  const queryString = `${include ? `(${include})` : ""}${include && exclude ? " AND " : ""}${exclude ? `NOT (${exclude})` : ""}`;
-
-  // liqe throws "Expected left to be defined." on the EmptyExpression an empty query parses to.
-  const query = queryString ? parse(queryString) : null;
-
-  return {
-    matches: (event: Record<string, unknown>) => query === null || test(query, event),
-    queryString,
-    include,
-    exclude,
-  };
+export function queryOf({ include, exclude }: Record<string, string | undefined>): Query {
+  return { include: include || undefined, exclude: exclude || undefined };
 }
 
-function formatHighlight(query?: string, data?: Record<string, unknown>) {
-  if (!query || !data) return undefined;
-
-  const highlights = highlight(parse(query), data);
-  if (highlights.length === 0) return undefined;
-
-  return Object.fromEntries(highlights.map(({ path, query }) => [path, String(query)]));
-}
-
-function getMatches({ include, exclude }: Options, event: Record<string, unknown>) {
-  return {
-    include: formatHighlight(include, event),
-    exclude: formatHighlight(exclude, event),
-  };
+/** A query naming what no subject carries is refused whole, so say which words did it. */
+export function unreadable({ include, exclude }: Query): string[] {
+  return [...new Set([...strangeFields(include ?? ""), ...strangeFields(exclude ?? "")])];
 }
 
 export const optionsMiddleware = createMiddleware<{
   Variables: {
     event: GithubEvent;
     hook: HookScope;
+    query: Query;
   };
 }>(async ({ req, set, json }, next) => {
   const name = req.header("x-github-event");
   if (!name) return json({ message: "Missing x-github-event header." }, { status: 400 });
 
   const body = await req.raw.clone().json<GithubEventPayload>();
-
-  const { matches, queryString, include, exclude } = getQuery(req.query());
 
   invariant(!("type" in body), 'Invalid body: "type" property is reserved for internal use.');
 
@@ -68,18 +34,12 @@ export const optionsMiddleware = createMiddleware<{
     type: `${name}${action ? `.${action}` : ""}`,
   } as GithubEvent;
 
-  if (!matches(event))
-    return json({
-      message: "Event dropped.",
-      query: queryString,
-      matches: getMatches({ include, exclude }, event),
-    });
-
   // Absent on older deliveries and on replays.
   const target = req.header("x-github-hook-installation-target-type");
 
   set("event", event);
   set("hook", target === "organization" ? "organization" : "repository");
+  set("query", queryOf(req.query()));
 
   return next();
 });
