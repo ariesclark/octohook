@@ -1,3 +1,4 @@
+import { t } from "../../messages.ts";
 import { avatarThumbnail } from "../../components/avatar";
 import { WebhookContent } from "../../types";
 import { besideThumbnail, CommitLine, hasSingleAuthor } from "./commits";
@@ -11,6 +12,9 @@ import {
 } from "./shared";
 
 const thumbnailAuthors = 3;
+
+/** GitHub sends every commit a push carried, and Discord takes 4000 characters in one line. */
+const mostCommits = 10;
 
 const sectionRows = 3;
 const narrowWidth = 62;
@@ -31,9 +35,15 @@ export async function PushMessage({
   const headline = <RefHeadline event={event} branch={branch} hook={hook} showSender={false} />;
   const showAuthor = !hasSingleAuthor(event.commits);
 
-  const lines = event.commits.map((commit) => (
-    <CommitLine commit={commit} showAuthor={showAuthor} omitAuthor={event.sender?.login} />
-  ));
+  const listed = event.commits.slice(0, mostCommits);
+  const rest = event.commits.length - listed.length;
+
+  const lines = [
+    ...listed.map((commit) => (
+      <CommitLine commit={commit} showAuthor={showAuthor} omitAuthor={event.sender?.login} />
+    )),
+    ...(rest > 0 ? [<small>{t("push.more", { count: rest })}</small>] : []),
+  ];
 
   // Discord puts a margin between sibling components.
   const group = (items: string[]): string[] =>

@@ -53,6 +53,7 @@
   "push.commits": ".input {$count :number}\n.match $count\none {{{$count} new commit}}\n*   {{{$count} new commits}}",
   "push.forced": "force-pushed {$branch} from {$before} to {$after}",
   "push.headline": "pushed {$commits} to {$branch}",
+  "push.more": ".input {$count :number}\n.match $count\none {{and one more commit}}\n*   {{and {$count} more commits}}",
   "push.tag": "pushed tag {$tag}",
   "run.checks": "checks",
   "run.deploying": ".input {$count :number}\n.match $count\n*   {{{$count} deploying}}",
