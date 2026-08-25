@@ -13,6 +13,7 @@ Octohook is a Cloudflare Worker that receives the webhook instead. It renders ea
 - **One message per commit+CI.** A push, its check runs, annotations, and deployments collapse into a single board that edits itself in place as results arrive.
 - **The events Discord throws away.** `workflow_run` and `deployment_status` both appear ([discord-api-docs#6203](https://github.com/discord/discord-api-docs/issues/6203), [#5283](https://github.com/discord/discord-api-docs/issues/5283)).
 - **Patient under rate limits.** On a limit it waits the seconds Discord names and sends again. Your event arrives late, not never.
+- **The step a job is on.** While a run is in flight the board names the step each job is working through, and drops it once the job has a verdict.
 - **Filtering that filters.** `include` and `exclude` parameters, written in [liqe](https://github.com/gajus/liqe#query-syntax) query syntax, decide what the channel draws.
 - **A bad query fails loud.** Refused whole, never half-applied, reported back to GitHub where you can read it.
 
@@ -47,13 +48,16 @@ Queries follow [liqe query syntax](https://github.com/gajus/liqe#query-syntax); 
 
 | Run field | What it matches |
 | --- | --- |
-| `trigger` | what set the run off: push, schedule, workflow_dispatch, release |
+| `trigger` | what set the run off: push, schedule, workflow_dispatch, release, issues, issue_comment |
 | `workflow` | workflow name |
 | `number` | the workflow run's number, like 14244 |
 | `result` | passed, failed, running, skipped, cancelled |
 | `ever` | worst result held so far: a green re-run stays failed |
 | `jobs.total` / `jobs.failed` / `jobs.passed` / `jobs.running` / `jobs.skipped` | job counts |
-| `deployments` / `seconds` | deployment count, elapsed seconds |
+| `details` | what the board draws under the run: annotations, job summaries, deployments |
+| `annotations` | how many warnings or worse a reader would see |
+| `deployments` | how many environments it shipped to |
+| `seconds` | how long it ran |
 
 Four rules:
 
@@ -64,10 +68,18 @@ Four rules:
 
 #### Examples
 
-**Silence a healthy cron.** A scheduled run says nothing until it breaks, then draws a board that stays up even after someone re-runs it green.
+**Silence work that went fine and said nothing.** The one to put on every hook. A run draws while it is going, stays if it fails, and takes itself down when it finishes with nothing under it.
 
 ```
-?exclude=type:run AND trigger:schedule AND ever:passed
+?preset=recommended
+```
+
+`recommended` is a name for `exclude=type:run AND ever:passed AND details:0`, so a hook can say a word rather than URL-encode a sentence. Nothing is hidden in it: the `202` reports the query it resolved to under `drawing`, so GitHub's delivery pane shows what your hook is actually running, and a name spelled wrong is refused the way any unreadable query is.
+
+Write the query out yourself when it does not fit, and keep both if you like: a preset and your own `exclude` are joined with `OR`.
+
+```
+?preset=recommended&exclude=type:star
 ```
 
 **Only what failed.** The channel sits empty until something needs a person.
@@ -87,6 +99,7 @@ Four rules:
 
 - Every Discord channel gets its own Durable Object (`src/channel.ts`). Events for one channel queue behind each other instead of fighting.
 - GitHub is acked instantly, since it does not resend an event answered `2xx`. An alarm redraws two seconds later, fifteen during bursts, so a push trailed by ten check runs costs one edit, not eleven.
+- While a run has a job without a verdict, the channel asks GitHub what step it is on every five seconds, sending the last `ETag` so an answer that has not changed costs no rate limit. It gives up after 20 minutes.
 - Delivery state is retained for 48 hours.
 - Cleanup tolerates Discord being difficult: up to 25 delete attempts per draw, across up to 20 rounds (`src/deliver.ts`).
 
