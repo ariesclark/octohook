@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { getWebhookRequest } from "./discord";
 import type { Batch } from "./channel.ts";
 import { factsOf, foldablePayload, shaOf, type Folded } from "./foldable.ts";
+import { withoutUploads } from "./uploads.ts";
 import { occurredAt } from "./occurred";
 import { optionsMiddleware, unreadable } from "./options";
 import { localReferenceFor } from "./resolve.ts";
@@ -58,7 +59,7 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
   };
 
   const request = localReferenceFor(delivery) ? null : await getWebhookRequest(secret, event, hook);
-  if (request) delivery.content = await contentOf(request);
+  if (request) delivery.content = withoutUploads((await contentOf(request)) as Record<string, unknown>);
 
   if (!request && !shaOf(name, payload)) return json({ message: "Event dropped." });
 
