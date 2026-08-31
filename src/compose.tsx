@@ -11,7 +11,9 @@ import type { HookScope } from "./discord/refs";
 import { isFoldable } from "./foldable.ts";
 import { mergeAdjacent } from "./merge.ts";
 import { drawn, subjectOfNote, subjectOfRun, type Query, type Subject } from "./policy.ts";
-import { ownerOf, type Repository, type Run, type World } from "./state.ts";
+import { ComponentType } from "discord-api-types/v10";
+
+import { ownerOf, type Note, type Repository, type Run, type World } from "./state.ts";
 
 export type Composed = {
   key: string;
@@ -64,6 +66,55 @@ export function compose(
     return drawn(queries?.get(name) ?? {}, subject);
   };
 
+  // A line comment belongs to the review that carried it, and is drawn inside its message.
+  const reviews = new Map<string, Note>();
+  for (const note of world.notes)
+    if (note.kind === "pull_request_review" && note.review) reviews.set(note.review, note);
+
+  const carried = new Map<string, unknown[]>();
+  const folded = new Set<string>();
+
+  for (const note of world.notes) {
+    if (note.kind !== "pull_request_review_comment" || !note.review) continue;
+
+    const review = reviews.get(note.review);
+    if (!review || !asked(review.repository, subjectOfNote(review))) continue;
+
+    const { components = [] } = note.content as {
+      components?: { type?: number; components?: unknown[] }[];
+    };
+
+    // A container cannot hold another, so a comment's own box is opened and its parts kept.
+    const parts = components.flatMap((component) =>
+      component.type === ComponentType.Container ? (component.components ?? []) : [component],
+    );
+
+    carried.set(review.key, [...(carried.get(review.key) ?? []), ...parts]);
+    folded.add(note.key);
+  }
+
+  const withComments = (note: Note): unknown => {
+    const comments = carried.get(note.key);
+    if (!comments) return note.content;
+
+    const content = note.content as { components?: { type?: number; components?: unknown[] }[] };
+    const components = [...(content.components ?? [])];
+
+    const index = components.findLastIndex(
+      (component) => component.type === ComponentType.Container,
+    );
+    const container = index === -1 ? undefined : components[index];
+
+    if (!container) return { ...content, components: [...components, ...comments] };
+
+    components[index] = {
+      ...container,
+      components: [...(container.components ?? []), ...comments],
+    };
+
+    return { ...content, components };
+  };
+
   const owner = new Map<string, string>();
   const claimed = new Set<string>();
 
@@ -78,6 +129,8 @@ export function compose(
   const standalone: Run[] = [];
 
   for (const note of world.notes) {
+    if (folded.has(note.key)) continue;
+
     const runs = [...world.runs.values()]
       .filter((run) => owner.get(run.id) === note.key)
       .filter((run) => asked(run.repository, subjectOfRun(run)))
@@ -96,7 +149,7 @@ export function compose(
       composed.push({
         key: note.key,
         at: note.at,
-        content: note.content,
+        content: withComments(note),
         merges: !isFoldable(note.kind),
       });
 
@@ -108,7 +161,7 @@ export function compose(
       repository: note.repository ?? runs[0]?.repository ?? repository,
     }) as { components?: unknown[] };
 
-    const content = note.content as { components?: unknown[] };
+    const content = withComments(note) as { components?: unknown[] };
 
     composed.push({
       key: note.key,

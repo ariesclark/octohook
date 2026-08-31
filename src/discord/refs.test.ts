@@ -97,6 +97,30 @@ describe("refDisplay", () => {
     assert.equal(text, "#277");
   });
 
+  it("drops a repository the message has already named", () => {
+    const { text } = refDisplay({
+      ref: "main",
+      repository: flirtual,
+      within: flirtual,
+      hook: "organization",
+      established: true,
+    });
+
+    assert.equal(text, "main");
+  });
+
+  it("still names another repository, which naming this one did not establish", () => {
+    const { text } = refDisplay({
+      ref: "patch-1",
+      repository: fork,
+      within: flirtual,
+      hook: "organization",
+      established: true,
+    });
+
+    assert.equal(text, "alice/flirtual:patch-1");
+  });
+
   it("treats a repository that only matches by name as elsewhere", () => {
     const { text } = refDisplay({
       ref: "main",

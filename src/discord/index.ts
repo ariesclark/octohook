@@ -8,6 +8,7 @@ import { getDeploymentStatusContent } from "./events/deployment-status";
 import { getCheckRunContent } from "./events/check-run";
 import { getIssueContent } from "./events/issues";
 import { getPullRequestContent } from "./events/pull-request";
+import { getPullRequestReviewContent } from "./events/pull-request-review";
 import { getStarContent } from "./events/star";
 import { getVulnerabilityAlertContent } from "./events/vulnerability-alert";
 import { getDeleteContent } from "./events/delete";
@@ -63,11 +64,12 @@ async function getWebhookContent(
     case "pull_request.synchronize":
       return getPullRequestContent(event, hook);
 
-    // Renovate rewrites a body on every rebase.
+    case "pull_request_review.submitted":
+      return getPullRequestReviewContent(event, hook);
+
+    // Every other message carries the title, so only a retarget is worth saying.
     case "pull_request.edited":
-      return event.changes?.title || event.changes?.base
-        ? getPullRequestContent(event, hook)
-        : null;
+      return event.changes?.base ? getPullRequestContent(event, hook) : null;
 
     case "delete":
       return getDeleteContent(event, hook);

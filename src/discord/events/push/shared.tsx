@@ -31,7 +31,7 @@ export function displayUsername(username: string): string {
   return username.match(/^(.+)\[bot\]$/)?.[1] ?? username;
 }
 
-function Sha({ repositoryUrl, sha }: { repositoryUrl: string; sha: string }) {
+export function Sha({ repositoryUrl, sha }: { repositoryUrl: string; sha: string }) {
   return (
     <a href={`${repositoryUrl}/commit/${sha}`}>
       <code>{sha.slice(0, 7)}</code>

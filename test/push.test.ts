@@ -35,6 +35,12 @@ const drawn = async (count: number) => {
   return ((content as { components?: unknown[] }).components ?? []) as MessageComponent[];
 };
 
+describe("a push, which names its repository first and so keeps the prefix", () => {
+  it("still says which repository the branch belongs to on an organization hook", async () => {
+    expect(JSON.stringify(await drawn(1))).toContain("flirtual:production");
+  });
+});
+
 describe("a push nobody could read in one sitting", () => {
   it("keeps every component inside what Discord will take", async () => {
     for (const component of await drawn(573))

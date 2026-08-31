@@ -64,6 +64,8 @@ export type Note = {
   repository?: Repository;
   sha?: string;
   facts?: Facts;
+  /** The review this note is, or the review a line comment was left as part of. */
+  review?: string;
   content: unknown;
 };
 
@@ -389,11 +391,16 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
           ? (payload.pull_request as unknown as { head?: { sha?: string } })?.head?.sha
           : undefined;
 
+    const review = (payload.review as { id?: number } | undefined)?.id;
+    const commentOf = (payload.comment as { pull_request_review_id?: number } | undefined)
+      ?.pull_request_review_id;
+
     const note: Note = {
       key,
       at,
       seen,
       kind: event,
+      review: (review ?? commentOf)?.toString(),
       repository: repositoryIn(payload),
       sha,
       facts: delivery.facts,

@@ -16,6 +16,10 @@ export function refTarget(ref: string): { label: string; path: string; kind: Ref
   return { label: named, path: `tree/${named}`, kind: "branch" };
 }
 
+export function pullRef(number: number): string {
+  return `refs/pull/${number}/head`;
+}
+
 export function preferredRef(ref: string, pulls?: readonly ({ number: number } | null)[]): string {
   if (pulls?.length !== 1) return ref;
 
@@ -34,11 +38,14 @@ export function refDisplay({
   repository,
   within,
   hook = "repository",
+  established = false,
 }: {
   ref: string;
   repository: Repository;
   within?: Repository;
   hook?: HookScope;
+  /** Whether the message has already named this repository, leaving nothing for a prefix to say. */
+  established?: boolean;
 }): { text: string; href: string } {
   const { label, path, kind } = refTarget(ref);
   const href = `${repository.html_url}/${path}`;
@@ -47,7 +54,7 @@ export function refDisplay({
 
   const prefix = elsewhere
     ? (repository.full_name ?? repository.name)
-    : hook === "organization"
+    : hook === "organization" && !established
       ? repository.name
       : "";
 

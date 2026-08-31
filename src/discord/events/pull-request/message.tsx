@@ -1,43 +1,15 @@
-import { ButtonStyle, ComponentType } from "discord-api-types/v10";
-
-import { toComponents } from "../../../markdown/components";
-import {
-  boldDeepHeadings,
-  decodeEntities,
-  dropComments,
-  dropRules,
-  formatTables,
-  labelAlerts,
-  leadingSection,
-  limit,
-  lineBreaks,
-  smallText,
-  taskLists,
-  unredirectLinks,
-} from "../../../markdown/transform";
+import { briefBody, SeeMore } from "../body";
 import { Ref } from "../../components/ref";
 import { t, type Phrase } from "../../messages.ts";
-import { HookScope } from "../../refs";
+import { HookScope, pullRef } from "../../refs";
 import { WebhookContent } from "../../types";
-import { displayUsername } from "../push/shared";
-import { pullRequestAction, pullRequestStats, PullRequestEvent } from "./shared";
-
-const bodyTransforms = [
-  unredirectLinks,
-  dropComments,
-  decodeEntities,
-  lineBreaks,
-  smallText,
-  taskLists,
-  formatTables,
-  boldDeepHeadings,
-  labelAlerts,
-  dropRules,
-];
+import { displayUsername, Sha } from "../push/shared";
+import { pullRequestAction, pullRequestChanges, PullRequestEvent } from "./shared";
 
 const bodyActions = new Set(["opened", "reopened", "marked ready for review"]);
 
-const briefLimit = 1600;
+/** What the pull request is called has been said by every message before these two. */
+const barePosts = new Set(["merged", "updated"]);
 
 function identity(event: PullRequestEvent) {
   const { sender } = event;
@@ -48,32 +20,13 @@ function identity(event: PullRequestEvent) {
   };
 }
 
-function Reference({ event }: { event: PullRequestEvent }): string {
+function Reference({ event, hook }: { event: PullRequestEvent; hook?: HookScope }): string {
   const { pull_request, repository } = event;
+  const within = pull_request.base?.repo ?? repository;
 
   return (
-    <a href={pull_request.html_url}>
-      {repository.name}#{pull_request.number}
-    </a>
+    <Ref repository={within} within={within} refName={pullRef(pull_request.number)} hook={hook} />
   );
-}
-
-function briefBody(body: string | null | undefined) {
-  const source = body?.replaceAll("\r", "").trim();
-  if (!source) return { components: [], truncated: false };
-
-  const printed = (components: ReturnType<typeof toComponents>) =>
-    components
-      .filter((component) => component.type === ComponentType.TextDisplay)
-      .map((component) => (component as { content: string }).content)
-      .join("").length;
-
-  const components = toComponents(source, [...bodyTransforms, leadingSection, limit(briefLimit)]);
-
-  return {
-    components,
-    truncated: printed(components) < printed(toComponents(source, bodyTransforms)),
-  };
 }
 
 function Branch({
@@ -96,15 +49,30 @@ function Branch({
       within={pull_request.base?.repo ?? repository}
       refName={ref}
       hook={hook}
+      established
     />
   );
 }
 
-function SeeMore({ event }: { event: PullRequestEvent }) {
+function PreviousBase({
+  event,
+  ref,
+  hook,
+}: {
+  event: PullRequestEvent;
+  ref: string;
+  hook?: HookScope;
+}): string {
+  const { pull_request, repository } = event;
+
   return (
-    <actionrow>
-      <button style={ButtonStyle.Link} url={event.pull_request.html_url} label={t("pull.more")} />
-    </actionrow>
+    <Ref
+      repository={pull_request.base?.repo ?? repository}
+      within={pull_request.base?.repo ?? repository}
+      refName={ref}
+      hook={hook}
+      established
+    />
   );
 }
 
@@ -112,9 +80,10 @@ const headlines: Partial<Record<string, Phrase>> = {
   opened: "pull.opened",
   reopened: "pull.reopened",
   merged: "pull.merged",
+  enqueued: "pull.enqueued",
+  dequeued: "pull.dequeued",
   closed: "pull.closed",
   updated: "pull.updated",
-  renamed: "pull.renamed",
   retargeted: "pull.retargeted",
   "marked ready for review": "pull.ready",
   "converted to draft": "pull.draft",
@@ -130,44 +99,64 @@ export function PullRequestMessage({
   const { pull_request } = event;
 
   const action = pullRequestAction(event);
-  const stats = pullRequestStats(pull_request);
+  const changes = pullRequestChanges(event);
   const base = pull_request.base?.ref;
   const head = pull_request.head?.ref;
+  const previous = changes?.base?.ref?.from;
+  const after = (event as { after?: string }).after;
+
+  const elsewhere =
+    Boolean(pull_request.head?.repo?.full_name) &&
+    pull_request.head?.repo?.full_name !== (pull_request.base?.repo ?? event.repository).full_name;
+
+  const phrase =
+    action === "updated" && !after
+      ? "pull.moved"
+      : action === "updated" && elsewhere
+        ? "pull.updated_elsewhere"
+        : (headlines[action] ?? "pull.other");
 
   const open = bodyActions.has(action);
   const { components, truncated } = open
     ? briefBody(pull_request.body)
     : { components: [], truncated: false };
 
+  const headline = (
+    <text>
+      <b>
+        {t(phrase, {
+          action,
+          reference: <Reference event={event} hook={hook} />,
+          head: head ? <Branch event={event} side="head" hook={hook} /> : "",
+          base: base ? <Branch event={event} side="base" hook={hook} /> : "",
+          previous: previous ? <PreviousBase event={event} ref={previous} hook={hook} /> : "",
+          sha: after ? (
+            <Sha
+              repositoryUrl={(pull_request.head?.repo ?? event.repository).html_url}
+              sha={after}
+            />
+          ) : (
+            ""
+          ),
+        })}
+      </b>
+    </text>
+  );
+
   return (
     <message {...identity(event)}>
-      <text>
-        <b>
-          {t(headlines[action] ?? "pull.other", {
-            action,
-            reference: <Reference event={event} />,
-            head: head ? <Branch event={event} side="head" hook={hook} /> : "",
-            base: base ? <Branch event={event} side="base" hook={hook} /> : "",
-          })}
-        </b>
-        <br />
-        {pull_request.title}
-        {stats ? (
-          <>
-            <br />
-            <small>{stats}</small>
-          </>
-        ) : (
-          ""
-        )}
-      </text>
-      {components.length > 0 ? (
-        <container>
-          {components}
-          {truncated ? <SeeMore event={event} /> : []}
-        </container>
-      ) : (
+      {headline}
+      {barePosts.has(action) ? (
         []
+      ) : (
+        <container>
+          <text>
+            <h3>{pull_request.title}</h3>
+          </text>
+          {components.length > 0 ? <separator divider={false} /> : []}
+          {components}
+          {truncated ? <SeeMore url={pull_request.html_url} /> : []}
+        </container>
       )}
     </message>
   );
