@@ -24,6 +24,30 @@ describe("occurredAt", () => {
     );
   });
 
+  // A review carries `review`, not an object named after the event, and it is stamped when it is
+  // submitted: without both, a review orders only by when GitHub happened to deliver it.
+  it("reads a review's own submission clock", () => {
+    assert.equal(
+      occurredAt({
+        type: "pull_request_review.submitted",
+        review: { submitted_at: "2026-08-30T22:13:30Z" },
+        pull_request: { updated_at: "2026-08-30T22:10:05Z" },
+      } as never),
+      at("2026-08-30T22:13:30Z"),
+    );
+  });
+
+  it("reads a line comment's own clock", () => {
+    assert.equal(
+      occurredAt({
+        type: "pull_request_review_comment.created",
+        comment: { created_at: "2026-08-30T22:16:36Z" },
+        pull_request: { updated_at: "2026-08-30T22:13:40Z" },
+      } as never),
+      at("2026-08-30T22:16:36Z"),
+    );
+  });
+
   it("falls through to the job's own clock when there is no updated_at", () => {
     const finished = {
       type: "check_run.completed",

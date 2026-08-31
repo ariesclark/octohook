@@ -2,12 +2,15 @@ import type { GithubEvent } from "./github";
 
 const subjects: Record<string, string> = {
   issues: "issue",
+  pull_request_review: "review",
+  pull_request_review_comment: "comment",
   push: "repository",
   repository_vulnerability_alert: "alert",
 };
 
 const clocks = [
   "updated_at",
+  "submitted_at",
   "completed_at",
   "dismissed_at",
   "fixed_at",
