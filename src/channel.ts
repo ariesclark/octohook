@@ -75,6 +75,7 @@ export type Inspection = {
   runs: {
     id: string;
     at: string;
+    seen: string;
     sha?: string;
     branch?: string;
     cause?: string;
@@ -345,6 +346,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
       runs.push({
         id: entry.id,
         at: entry.at,
+        seen: entry.seen,
         sha: entry.sha,
         branch: entry.branch,
         cause: entry.cause,
