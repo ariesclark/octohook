@@ -41,6 +41,95 @@ function workflowRun(conclusion: string | null, extra: object = {}) {
   };
 }
 
+describe("which note a run belongs to", () => {
+  const pushNote = (at: string, ref: string): Note => ({
+    key: `push.:${at}`,
+    at,
+    seen: at,
+    kind: "push",
+    sha: "abc1234",
+    facts: { ref },
+    content: {},
+  });
+
+  // One commit reached the channel three times here: a branch, main, then a tag cut from it.
+  test("belongs to the push that named the ref it ran on, not the last to arrive", () => {
+    const notes = [
+      pushNote("2026-08-31T06:25:10Z", "main"),
+      pushNote("2026-08-31T06:26:44Z", "v1.20.9"),
+    ];
+
+    const owner = ownerOf(notes, { sha: "abc1234", cause: "push", branch: "main" });
+
+    assert.equal(owner?.key, "push.:2026-08-31T06:25:10Z");
+  });
+
+  test("falls back to the latest when no note names the branch it ran on", () => {
+    const notes = [
+      pushNote("2026-08-31T06:25:10Z", "v1.0.0"),
+      pushNote("2026-08-31T06:26:44Z", "v1.1.0"),
+    ];
+
+    const owner = ownerOf(notes, { sha: "abc1234", cause: "push", branch: "main" });
+
+    assert.equal(owner?.key, "push.:2026-08-31T06:26:44Z");
+  });
+});
+
+describe("a run being told what it is doing", () => {
+  const workflowRun = (action: string, conclusion: string | null) => ({
+    event: "workflow_run",
+    action,
+    delivered_at: "2026-08-29T10:51:31Z",
+    payload: {
+      workflow_run: {
+        id: 1,
+        name: "Renovate",
+        run_number: 4,
+        event: "schedule",
+        conclusion,
+        head_sha: "abc1234",
+        head_branch: "main",
+      },
+      repository: { name: "flirtual", html_url: "https://g/f" },
+    } as never,
+  });
+
+  // A run that has only been asked for has reached no verdict; that is not the same as having none.
+  test("is not settled by being requested", () => {
+    const world = emptyWorld();
+
+    apply(world, workflowRun("requested", null), { runId: "1" });
+
+    assert.equal(world.runs.get("1")!.settled, undefined);
+  });
+
+  test("keeps the verdict it reached when a later say carries none", () => {
+    const world = emptyWorld();
+
+    apply(world, workflowRun("completed", "success"), { runId: "1" });
+    apply(world, workflowRun("in_progress", null), { runId: "1" });
+
+    assert.equal(world.runs.get("1")!.settled, "success");
+  });
+
+  test("still settles when it completes", () => {
+    const world = emptyWorld();
+
+    apply(world, workflowRun("completed", "failure"), { runId: "1" });
+
+    assert.equal(world.runs.get("1")!.settled, "failure");
+  });
+
+  test("settles with no verdict when it completes without one", () => {
+    const world = emptyWorld();
+
+    apply(world, workflowRun("completed", null), { runId: "1" });
+
+    assert.equal(world.runs.get("1")!.settled, null);
+  });
+});
+
 describe("apply", () => {
   test("adds a job to the run it belongs to", () => {
     const world = emptyWorld();

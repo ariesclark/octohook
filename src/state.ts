@@ -69,12 +69,22 @@ export type Note = {
   content: unknown;
 };
 
-export function ownerOf(notes: Note[], run: Pick<Run, "sha" | "run" | "cause">): Note | undefined {
+export function ownerOf(
+  notes: Note[],
+  run: Pick<Run, "sha" | "run" | "cause" | "branch">,
+): Note | undefined {
   const trigger = run.run?.trigger ?? run.cause;
   if (!run.sha || !trigger) return undefined;
 
   const candidates = notes.filter((note) => note.sha === run.sha && note.kind === trigger);
-  return candidates[candidates.length - 1];
+
+  // Several pushes can carry one commit — a branch, the branch it merged into, a tag cut from it —
+  // so a run belongs to whichever of them named the ref it ran on, rather than to the last to
+  // arrive. A run whose ref names none of them keeps the latest, which is all there is to go on.
+  const named = candidates.filter((note) => note.facts?.ref && note.facts.ref === run.branch);
+  const kept = named.length > 0 ? named : candidates;
+
+  return kept[kept.length - 1];
 }
 
 export type World = {
@@ -325,6 +335,10 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.startedAt ??= workflow.run_started_at;
     // `updated_at` moves while the run is going, so it only reads as an end once there is a verdict.
     entry.completedAt = workflow.conclusion ? workflow.updated_at : undefined;
+    // Only a finish settles a run: being asked for or getting under way carries no verdict, and
+    // saying so would read as a run that ended without one.
+    if (action !== "completed") return `run is ${action}`;
+
     entry.settled = workflow.conclusion;
     latch(entry);
 
