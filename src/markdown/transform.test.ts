@@ -13,6 +13,7 @@ import {
   limit,
   lineBreaks,
   listTables,
+  htmlLinks,
   smallText,
   taskLists,
   transformMarkdown,
@@ -680,5 +681,60 @@ describe("taskLists", () => {
       transformMarkdown("- [x] see [docs](https://example.com)", [taskLists]),
       "- ✅ see [docs](https://example.com)",
     );
+  });
+});
+
+describe("htmlLinks", () => {
+  it("writes an inline anchor as a link", () => {
+    assert.equal(
+      transformMarkdown(
+        'see <a href="https://example.com/docs" class="Link--inTextBlock">the docs</a> for more',
+        [htmlLinks],
+      ),
+      "see [the docs](https://example.com/docs) for more",
+    );
+  });
+
+  it("points a repository-relative anchor back at GitHub", () => {
+    assert.equal(
+      transformMarkdown('<a href="/vrchatapi/wiki-bot/new/main?filename=x">Add a skill</a>', [
+        htmlLinks,
+      ]),
+      "[Add a skill](https://github.com/vrchatapi/wiki-bot/new/main?filename=x)",
+    );
+  });
+
+  it("keeps the words of a tag it has no link for", () => {
+    assert.equal(transformMarkdown("a <kbd>ctrl</kbd> b", [htmlLinks]), "a ctrl b");
+  });
+
+  it("keeps the words of a block it has no link for", () => {
+    assert.equal(
+      transformMarkdown(
+        "<details>\n<summary>Why this matters</summary>\n\nhidden body\n\n</details>",
+        [htmlLinks],
+      ),
+      "Why this matters\n\nhidden body",
+    );
+  });
+
+  it("closes a link at its own tag, not at the first tag inside it", () => {
+    assert.equal(
+      transformMarkdown('x <a href="/a">one <b>bold</b> two</a> y', [htmlLinks]),
+      "x [one bold two](https://github.com/a) y",
+    );
+  });
+
+  it("keeps the words of an anchor whose address is unusable", () => {
+    assert.equal(
+      transformMarkdown('see <a href="http://[">bad</a> here', [htmlLinks]),
+      "see bad here",
+    );
+  });
+
+  it("leaves a fenced block of markup exactly as it was written", () => {
+    const fenced = '```html\n<a href="/x">y</a>\n```';
+
+    assert.equal(transformMarkdown(fenced, [htmlLinks]), fenced);
   });
 });

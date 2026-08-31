@@ -3,6 +3,7 @@ import { gfmFromMarkdown, gfmToMarkdown } from "mdast-util-gfm";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { gfm } from "micromark-extension-gfm";
 import { decodeNamedCharacterReference } from "decode-named-character-reference";
+import { Parser } from "htmlparser2";
 import type { ListItem, Nodes, Parent, PhrasingContent, RootContent, Table } from "mdast";
 
 export type Transform = (tree: Nodes) => void;
@@ -194,6 +195,16 @@ export function smallText(tree: Nodes): void {
   });
 }
 
+/** Sets a body apart from what it is about, the way a reply quotes the message above it. */
+export function quoted(tree: Nodes): void {
+  const root = tree as Parent;
+  if (root.children.length === 0) return;
+
+  root.children = [
+    { type: "blockquote", children: root.children as never },
+  ] as typeof root.children;
+}
+
 export function dropRules(tree: Nodes): void {
   visitParents(tree, (parent) => {
     parent.children = parent.children.filter(
@@ -287,6 +298,70 @@ export function limit(characters: number): Transform {
       omittedNote(omitted),
     ] as typeof root.children;
   };
+}
+
+/**
+ * GitHub writes its own anchors into a body, and Discord shows the tags rather than the link.
+ * The markup is read by one parser across the whole block, since a tag and the tag that closes it
+ * arrive as separate nodes and neither means anything alone.
+ */
+export function htmlLinks(tree: Nodes): void {
+  visitParents(tree, (parent) => {
+    const children = parent.children as RootContent[];
+    if (!children.some((child) => child.type === "html")) return;
+
+    const rebuilt: RootContent[] = [];
+    const opened: { index: number; url: string }[] = [];
+
+    // At the top of a document a bare run of words is a paragraph; inside one it is just words.
+    const block = parent.type === "root";
+    const asContent = (node: PhrasingContent): RootContent =>
+      block ? { type: "paragraph", children: [node] } : node;
+
+    let reading = true;
+
+    const parser = new Parser({
+      onopentag: (name, attributes) => {
+        if (!reading || name !== "a") return;
+
+        const url = attributes["href"] ? URL.parse(attributes["href"], "https://github.com") : null;
+
+        // An address nothing can resolve is dropped, and the words it wrapped are kept.
+        if (url) opened.push({ index: rebuilt.length, url: url.href });
+      },
+      onclosetag: (name) => {
+        if (!reading || name !== "a") return;
+
+        const open = opened.pop();
+        if (!open) return;
+
+        const inner = rebuilt.splice(open.index) as RootContent[];
+
+        // Words lifted to a paragraph above are put back inline, inside the link.
+        const flattened = inner.flatMap((node) =>
+          node.type === "paragraph"
+            ? (node.children as PhrasingContent[])
+            : [node as PhrasingContent],
+        );
+
+        rebuilt.push(asContent({ type: "link", url: open.url, children: flattened }));
+      },
+      // Any other markup keeps its words: a `<details>` summary is text, not decoration.
+      ontext: (text) => {
+        if (reading && text.trim()) rebuilt.push(asContent({ type: "text", value: text.trim() }));
+      },
+    });
+
+    for (const child of children) {
+      if (child.type === "html") parser.write(child.value);
+      else rebuilt.push(child);
+    }
+
+    reading = false;
+    parser.end();
+
+    parent.children = rebuilt as typeof parent.children;
+  });
 }
 
 export function unredirectLinks(tree: Nodes): void {
