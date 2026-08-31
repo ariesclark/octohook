@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { Hono } from "hono";
 
 import { getWebhookRequest } from "./discord";
+import { contentOf } from "./discord/request";
 import type { Batch } from "./channel.ts";
 import { factsOf, foldablePayload, shaOf, type Folded } from "./foldable.ts";
 import { withoutUploads } from "./uploads.ts";
@@ -34,12 +35,6 @@ app.get("/avatars", async ({ req, json, newResponse }) => {
   return answer;
 });
 
-async function contentOf(request: Request): Promise<unknown> {
-  return request.headers.get("content-type")?.startsWith("application/json")
-    ? await request.json()
-    : JSON.parse(String((await request.formData()).get("payload_json")));
-}
-
 /** GitHub does not send an event twice once it has a 2xx, so this is awaited before answering. */
 async function fold(channel: string, batch: Batch) {
   for (let attempt = 0; ; attempt++) {
@@ -51,6 +46,25 @@ async function fold(channel: string, batch: Batch) {
     }
   }
 }
+
+app.get("/inspect/:secret{.+}", async ({ req, json }) => {
+  const { secret } = req.param();
+  const inspection = await env.CHANNEL.getByName(secret.split("/")[0]!).inspect();
+
+  // A channel nobody has delivered to holds nothing, and says nothing about whether it exists.
+  if (!inspection) return json({ message: "No such channel." }, 404);
+
+  return json(inspection);
+});
+
+app.post("/replay/:secret{.+}", async ({ req, json }) => {
+  const { secret } = req.param();
+  const channel = env.CHANNEL.getByName(secret.split("/")[0]!);
+
+  if (!(await channel.inspect())) return json({ message: "No such channel." }, 404);
+
+  return json(await channel.redraw(new URL(req.url).origin));
+});
 
 app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
   const { secret } = req.param();
@@ -77,6 +91,7 @@ app.post("/:secret{.+}", optionsMiddleware, async ({ req, get, json }) => {
     received_at: new Date().toISOString(),
     facts: factsOf(payload),
     payload: foldablePayload(name, payload),
+    source: { ...payload, type: event.type },
   };
 
   const request = localReferenceFor(delivery)

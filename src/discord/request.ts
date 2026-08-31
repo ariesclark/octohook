@@ -33,3 +33,10 @@ export function toRequest(secret: string, { files, ...message }: WebhookContent)
     body: form,
   });
 }
+
+/** A rendered message, read back out of the request that would have carried it to Discord. */
+export async function contentOf(request: Request): Promise<unknown> {
+  return request.headers.get("content-type")?.startsWith("application/json")
+    ? await request.json()
+    : JSON.parse(String((await request.formData()).get("payload_json")));
+}

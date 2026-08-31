@@ -1,6 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { compose } from "./compose";
+import { getWebhookRequest } from "./discord";
+import { contentOf } from "./discord/request.ts";
+import type { GithubEvent } from "./github.ts";
+import { withoutUploads } from "./uploads.ts";
 import { createGithub, type Github } from "./discord/events/check-run/run.ts";
 import { deliverAll, discordTransport, type Held } from "./deliver.ts";
 import type { Folded } from "./foldable.ts";
@@ -11,6 +15,7 @@ import {
   apply,
   applyJobs,
   forget,
+  noteKeyOf,
   watching,
   type Note,
   type Repository,
@@ -44,6 +49,41 @@ const watchEvery = 5_000;
 const maximumWatches = 240;
 
 export type Trouble = { at: string; keys: string[] };
+
+export type Redrawn = { rendered: number; changed: number; redrawn: number; pending: number };
+
+export type Inspection = {
+  repository: string;
+  hook: HookScope;
+  revision: number;
+  drawAt: number;
+  pendingSince: number;
+  trouble?: Trouble;
+  holding: { notes: number; runs: number; drawn: number };
+  notes: {
+    key: string;
+    kind: string;
+    at: string;
+    seen: string;
+    sha?: string;
+    review?: string;
+    repository?: string;
+    drawn: number;
+    /** Whether the event that made this note is still kept, and so can be drawn again. */
+    source: boolean;
+  }[];
+  runs: {
+    id: string;
+    at: string;
+    sha?: string;
+    branch?: string;
+    cause?: string;
+    settled: string | null;
+    stranded: boolean;
+    jobs: number;
+    unfinished: number;
+  }[];
+};
 
 export type Outcome = {
   changed: string[];
@@ -133,6 +173,9 @@ export class Channel extends DurableObject<CloudflareBindings> {
 
     const revision = (kv.get<number>("revision") ?? 0) + 1;
 
+    for (const delivery of deliveries)
+      if (delivery.source) kv.put(`source:${noteKeyOf(delivery)}`, delivery.source);
+
     kv.put("notes", world.notes);
     kv.put("revision", revision);
     kv.put("pendingSince", pendingSince);
@@ -184,6 +227,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
     const world = this.#world();
 
     for (const key of forget(world, new Date(Date.now() - retention).toISOString())) {
+      kv.delete(`source:${key}`);
       kv.delete(`sent:${key}`);
       if (key.startsWith("run:")) kv.delete(key);
     }
@@ -281,6 +325,111 @@ export class Channel extends DurableObject<CloudflareBindings> {
     }
 
     return moved;
+  }
+
+  /** What the channel is holding, without the rendered messages the channel itself already shows. */
+  inspect(): Inspection | null {
+    const { kv } = this.ctx.storage;
+
+    const meta = kv.get<Meta>("meta");
+    if (!meta) return null;
+
+    const notes = kv.get<Note[]>("notes") ?? [];
+
+    const held = new Map<string, Held>();
+    for (const [key, value] of kv.list<Held>({ prefix: "sent:" }))
+      held.set(key.slice("sent:".length), value);
+
+    const runs: Inspection["runs"] = [];
+    for (const [, entry] of kv.list<Run>({ prefix: "run:" }))
+      runs.push({
+        id: entry.id,
+        at: entry.at,
+        sha: entry.sha,
+        branch: entry.branch,
+        cause: entry.cause,
+        settled: entry.settled ?? null,
+        /** Every job finished, yet no completion ever settled the run: nothing will resolve it. */
+        stranded: entry.settled === undefined && entry.jobs.every(({ conclusion }) => conclusion),
+        jobs: entry.jobs.length,
+        unfinished: entry.jobs.filter(({ conclusion }) => !conclusion).length,
+      });
+
+    return {
+      repository: meta.repository.full_name ?? meta.repository.name,
+      hook: meta.hook,
+      revision: kv.get<number>("revision") ?? 0,
+      drawAt: kv.get<number>("flushAt") ?? 0,
+      pendingSince: kv.get<number>("pendingSince") ?? 0,
+      trouble: kv.get<Trouble>("trouble"),
+      holding: { notes: notes.length, runs: runs.length, drawn: held.size },
+      notes: notes.map((note) => ({
+        key: note.key,
+        kind: note.kind,
+        at: note.at,
+        seen: note.seen,
+        sha: note.sha,
+        review: note.review,
+        repository: note.repository?.full_name ?? note.repository?.name,
+        drawn: held.get(note.key)?.ids.length ?? 0,
+        source: kv.get(`source:${note.key}`) !== undefined,
+      })),
+      runs,
+    };
+  }
+
+  /**
+   * Draws every message again from the event that made it, so a change to the rendering reaches
+   * the messages already in the channel. A note whose event is no longer kept is left as it was.
+   */
+  async redraw(origin?: string): Promise<Redrawn> {
+    const { kv } = this.ctx.storage;
+
+    const meta = kv.get<Meta>("meta");
+    if (!meta) return { rendered: 0, changed: 0, redrawn: 0, pending: 0 };
+
+    const notes = kv.get<Note[]>("notes") ?? [];
+
+    let rendered = 0;
+    let changed = 0;
+
+    for (const note of notes) {
+      const source = kv.get<Record<string, unknown>>(`source:${note.key}`);
+      if (!source) continue;
+
+      const request = await getWebhookRequest(
+        meta.secret,
+        source as unknown as GithubEvent,
+        meta.hook,
+        origin,
+      );
+      if (!request) continue;
+
+      rendered += 1;
+
+      const content = withoutUploads((await contentOf(request)) as Record<string, unknown>);
+      if (JSON.stringify(content) === JSON.stringify(note.content)) continue;
+
+      note.content = content;
+      changed += 1;
+    }
+
+    if (changed > 0) kv.put("notes", notes);
+
+    // What each message was last drawn as is forgotten, so every one of them is sent again.
+    let redrawn = 0;
+    for (const [key, value] of kv.list<Held>({ prefix: "sent:" })) {
+      kv.put(key, { ...value, drawn: "" } satisfies Held);
+      redrawn += 1;
+    }
+
+    const world: World = { runs: new Map(), notes };
+    for (const [key, entry] of kv.list<Run>({ prefix: "run:" }))
+      world.runs.set(key.slice("run:".length), entry);
+
+    const { pending } = await this.#draw(world);
+
+    return { rendered, changed, redrawn, pending };
   }
 
   async #draw(world: World): Promise<{ revision: number | undefined; pending: number }> {

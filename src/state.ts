@@ -211,6 +211,11 @@ export function forget(world: World, before: string): string[] {
   return dropped;
 }
 
+/** How a note is named: the event and the moment it happened, so a redelivery lands on it again. */
+export function noteKeyOf(delivery: Pick<Delivery, "event" | "action" | "delivered_at">): string {
+  return `${delivery.event}.${delivery.action ?? ""}:${delivery.delivered_at}`;
+}
+
 export function apply(world: World, delivery: Delivery, resolved: Resolved = {}): string {
   const { payload, event, action } = delivery;
   const at = delivery.delivered_at;
@@ -382,7 +387,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
   }
 
   if (resolved.content) {
-    const key = `${event}.${action ?? ""}:${at}`;
+    const key = noteKeyOf(delivery);
 
     const sha =
       event === "push"

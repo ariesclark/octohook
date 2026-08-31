@@ -157,3 +157,97 @@ describe("a deployment status off a workflow run", () => {
     });
   });
 });
+
+describe("looking at what a channel is holding", () => {
+  it("says nothing to somebody who does not know the hook", async () => {
+    await deliver("?token=github-token");
+
+    const response = await SELF.fetch("https://octohook.test/inspect/nobody/at-all");
+
+    expect(response.status).toBe(404);
+  });
+
+  it("counts what it holds, and names each note it drew", async () => {
+    await deliver("?token=github-token");
+
+    const response = await SELF.fetch(`https://octohook.test/inspect/${channel}/webhook-token`);
+    const body = await response.text();
+    if (response.status !== 200) throw new Error(`${response.status} ${body}`);
+
+    const world = JSON.parse(body) as {
+      revision: number;
+      holding: { notes: number; runs: number };
+      notes: { key: string; kind: string; drawn: number }[];
+    };
+
+    expect(response.status).toBe(200);
+    expect(world.holding.notes).toBe(1);
+    expect(world.notes[0]!.kind).toBe("star");
+    expect(world.revision).toBeGreaterThan(0);
+
+    // Nothing is drawn until the alarm the fold set goes off.
+    expect(world.notes[0]!.drawn).toBe(0);
+  });
+
+  it("carries no rendered content, which is the channel's job to show", async () => {
+    await deliver("?token=github-token");
+
+    const response = await SELF.fetch(`https://octohook.test/inspect/${channel}/webhook-token`);
+
+    expect(await response.text()).not.toContain("components");
+  });
+});
+
+describe("drawing a channel again", () => {
+  it("sends every message it holds back to Discord", async () => {
+    await deliver("?token=github-token");
+
+    const posted: string[] = [];
+    const inner = globalThis.fetch;
+
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.startsWith("https://discord.com")) posted.push(url);
+
+      return inner(input as RequestInfo, init);
+    });
+
+    const response = await SELF.fetch(`https://octohook.test/replay/${channel}/webhook-token`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ pending: 0 });
+    expect(posted.length).toBeGreaterThan(0);
+  });
+
+  it("renders each message again from the event that made it", async () => {
+    await deliver("?token=github-token");
+
+    const response = await SELF.fetch(`https://octohook.test/replay/${channel}/webhook-token`, {
+      method: "POST",
+    });
+
+    // Nothing about the rendering changed, so every message is drawn again as it already was.
+    expect(await response.json()).toMatchObject({ rendered: 1, changed: 0 });
+  });
+
+  it("leaves a note it has no event for alone", async () => {
+    await deliver("?token=github-token");
+
+    const before = await SELF.fetch(`https://octohook.test/inspect/${channel}/webhook-token`);
+    const { notes } = (await before.json()) as { notes: { key: string; source: boolean }[] };
+
+    expect(notes[0]!.source).toBe(true);
+  });
+
+  it("is not something a stranger can set off", async () => {
+    await deliver("?token=github-token");
+
+    const response = await SELF.fetch("https://octohook.test/replay/nobody/at-all", {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(404);
+  });
+});

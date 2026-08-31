@@ -2,6 +2,8 @@ import type { Delivery, Facts } from "./state.ts";
 
 export type Folded = Delivery & {
   content?: unknown;
+  /** The event as GitHub sent it, kept so its message can be drawn again from it later. */
+  source?: Record<string, unknown>;
 };
 
 /** Read where the whole event still exists, since the fold keeps none of it. */
