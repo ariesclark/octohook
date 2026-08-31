@@ -79,6 +79,9 @@ export type Inspection = {
     sha?: string;
     branch?: string;
     cause?: string;
+    /** What set the run off, which decides the kind of note it can belong to. */
+    trigger?: string;
+    name?: string;
     settled: string | null;
     stranded: boolean;
     jobs: number;
@@ -350,6 +353,8 @@ export class Channel extends DurableObject<CloudflareBindings> {
         sha: entry.sha,
         branch: entry.branch,
         cause: entry.cause,
+        trigger: entry.run?.trigger,
+        name: entry.run ? entry.run.name : entry.title,
         settled: entry.settled ?? null,
         /** Every job finished, yet no completion ever settled the run: nothing will resolve it. */
         stranded: entry.settled === undefined && entry.jobs.every(({ conclusion }) => conclusion),
