@@ -297,7 +297,7 @@ describe("order", () => {
 
   it("says the same things in the same order as sending one by one", async () => {
     const requests = [
-      asUserAt("flitty-bot", "pushed 1 new commit"),
+      asUserAt("flitty-bot", "pushed 1 commit"),
       asUserAt("GitHub Actions", "deploying #277"),
       asUserAt("GitHub Actions", "eslint passed"),
       asUserAt("flitty-bot", "opened #278"),

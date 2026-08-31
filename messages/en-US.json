@@ -50,7 +50,7 @@
   "pull.retargeted": "retargeted {$reference} from {$head} into {$base}",
   "pull.updated": "updated {$reference} from {$head} into {$base}",
   "push.branch": "created branch {$branch}",
-  "push.commits": ".input {$count :number}\n.match $count\none {{{$count} new commit}}\n*   {{{$count} new commits}}",
+  "push.commits": ".input {$count :number}\n.match $count\none {{{$count} commit}}\n*   {{{$count} commits}}",
   "push.forced": "force-pushed {$branch} from {$before} to {$after}",
   "push.headline": "pushed {$commits} to {$branch}",
   "push.more": ".input {$count :number}\n.match $count\none {{and one more commit}}\n*   {{and {$count} more commits}}",

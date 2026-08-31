@@ -10,7 +10,7 @@ describe("the catalogue", () => {
     total: 2,
     minutes: 1,
     seconds: 2,
-    commits: "[2 new commits](https://example.test/compare)",
+    commits: "[2 commits](https://example.test/compare)",
     branch: "[main](https://example.test/tree/main)",
     before: "[`abc1234`](https://example.test/commit/abc1234)",
     after: "[`def5678`](https://example.test/commit/def5678)",

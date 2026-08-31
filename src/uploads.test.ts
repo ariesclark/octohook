@@ -11,7 +11,7 @@ describe("a message the channel cannot carry a file for", () => {
       {
         type: 9,
         accessory: { type: 11, media: { url: "attachment://authors.png" } },
-        components: [{ type: 10, content: "pushed 3 new commits" }],
+        components: [{ type: 10, content: "pushed 3 commits" }],
       },
       { type: 10, content: "abc1234 a commit" },
     ],
@@ -24,7 +24,7 @@ describe("a message the channel cannot carry a file for", () => {
   test("keeps every word the section was holding", () => {
     const drawn = JSON.stringify(withoutUploads(uploaded));
 
-    assert.match(drawn, /pushed 3 new commits/);
+    assert.match(drawn, /pushed 3 commits/);
     assert.match(drawn, /abc1234 a commit/);
     assert.doesNotMatch(drawn, /attachment:\/\//);
   });
