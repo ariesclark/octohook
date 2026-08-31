@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { checkMark, deploymentMark, issueMark, marks, severityMark } from "./marks.ts";
+import {
+  checkMark,
+  deploymentMark,
+  issueMark,
+  marks,
+  severityMark,
+  vulnerabilityMark,
+} from "./marks.ts";
 
 describe("marks", () => {
   it("gives every state a distinct mark", () => {
@@ -84,5 +91,18 @@ describe("severityMark", () => {
     assert.equal(severityMark("high"), marks.bad);
     assert.equal(severityMark("moderate"), marks.warning);
     assert.equal(severityMark("low"), marks.quiet);
+  });
+});
+
+describe("vulnerabilityMark", () => {
+  it("reads a fixed alert as good and a dismissed one as dropped", () => {
+    assert.equal(vulnerabilityMark("resolve", "critical"), marks.good);
+    assert.equal(vulnerabilityMark("dismiss", "high"), marks.dropped);
+  });
+
+  it("scales an open alert with its severity", () => {
+    assert.equal(vulnerabilityMark("create", "critical"), marks.bad);
+    assert.equal(vulnerabilityMark("reopen", "moderate"), marks.warning);
+    assert.equal(vulnerabilityMark("create", "low"), marks.quiet);
   });
 });

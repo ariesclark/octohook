@@ -68,3 +68,11 @@ export function severityMark(severity: string | null | undefined): Mark {
 
   return severities[severity.toLowerCase()] ?? marks.quiet;
 }
+
+/** A vulnerability that is over reads as what became of it; only a live one carries its severity. */
+export function vulnerabilityMark(action: string, severity: string | null | undefined): Mark {
+  if (action === "resolve") return marks.good;
+  if (action === "dismiss") return marks.dropped;
+
+  return severityMark(severity);
+}
