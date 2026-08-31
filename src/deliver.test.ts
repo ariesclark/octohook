@@ -261,6 +261,36 @@ describe("discordTransport.remove", () => {
     return { calls, restore: () => (globalThis.fetch = original) };
   };
 
+  test("sends a message again when the one it was editing is gone", async () => {
+    const { calls, restore } = answers([
+      { status: 404, body: { code: 10008, message: "Unknown Message" } },
+      { status: 200, body: { id: "9" } },
+    ]);
+
+    try {
+      const sent = await discordTransport("id/token").send({ components: [] }, "7");
+
+      assert.equal(sent, "9");
+      assert.match(calls[0]!, /^PATCH .*\/messages\/7/);
+      assert.match(calls[1]!, /^POST /);
+    } finally {
+      restore();
+    }
+  });
+
+  test("keeps the message it was editing when Discord refuses for another reason", async () => {
+    const { calls, restore } = answers([{ status: 400, body: { components: ["1"] } }]);
+
+    try {
+      const sent = await discordTransport("id/token").send({ components: [] }, "7");
+
+      assert.equal(sent, "7");
+      assert.equal(calls.length, 1);
+    } finally {
+      restore();
+    }
+  });
+
   test("says a message is gone when Discord took it", async () => {
     const { calls, restore } = answers([{ status: 204 }]);
 

@@ -58,11 +58,15 @@ export function discordTransport(secret: string): Transport {
 
     if (!response.ok) {
       const components = (content.components ?? []) as MessageComponent[];
+      const said = await response.text();
 
       console.log(
-        `${response.status} ${await response.text()} ` +
+        `${response.status} ${said} ` +
           `[${componentCount(components)} components, ${characterCount(components)} characters]`,
       );
+
+      // Somebody took the message away, so there is nothing to edit: send it again.
+      if (messageId && response.status === 404) return send(content);
 
       return messageId;
     }
