@@ -49,12 +49,22 @@ export async function referenceFor(
 
   if (!repository || !suite) return undefined;
 
-  return (
-    (await github.runReferenceFromSuite(repository, suite)) ?? {
-      repository,
-      runId: `suite-${suite}`,
-    }
-  );
+  const found = await github.runReferenceFromSuite(repository, suite);
+  if (found) return found;
+
+  // The suite named no run, so its checks gather under an identity of their own — and a later
+  // `workflow_run.completed` settles the run's id instead, leaving these unsettled.
+  console.log({
+    level: "warn",
+    at: "referenceFor",
+    message: "no workflow run for check suite",
+    repository,
+    suite,
+    event: delivery.event,
+    action: delivery.action,
+  });
+
+  return { repository, runId: `suite-${suite}` };
 }
 
 export type RenderNote = () => Promise<unknown>;
