@@ -201,6 +201,14 @@ describe("a pull request that changed state, not shape", () => {
     expect(content).not.toContain("wiki-bot:main");
   });
 
+  // Closing changes the state and nothing else; the title has been said on every message before it.
+  it("says only that it closed, without repeating the title", async () => {
+    const content = await drawn(pull("closed", { pull_request: withBody("closed") }));
+
+    expect(content).not.toContain("fix: retry forum API requests");
+    expect(payload(content!).components).toHaveLength(1);
+  });
+
   // By the time it lands, the title has been said on every message before this one.
   it("says nothing but the landing when it merges: no title, no description", async () => {
     const merged = pull("closed", {
@@ -225,12 +233,13 @@ describe("a pull request that changed state, not shape", () => {
     expect(content).not.toContain("copilot/fix-failing-github-actions-job");
   });
 
-  it("reopens without repeating the branches, but with the description", async () => {
+  it("reopens with nothing but the reopening", async () => {
     const content = await drawn(pull("reopened", { pull_request: withBody("reopened") }));
 
     expect(content).toContain("reopened");
     expect(content).not.toContain("copilot/fix-failing-github-actions-job");
-    expect(content).toContain("The forum returned a 429.");
+    expect(content).not.toContain("The forum returned a 429.");
+    expect(payload(content!).components).toHaveLength(1);
   });
 
   it("keeps the verb next to what it did, marking ready for review", async () => {
@@ -262,7 +271,7 @@ describe("where the title sits", () => {
   // A section takes text displays alone, so the rule cannot sit beside the widget: Discord
   // answers 400 to a separator inside one. It is drawn only where something follows it.
   it("leaves the title unruled when nothing follows it", async () => {
-    const body = (await drawn(pull("closed")))!;
+    const body = (await drawn(pull("opened")))!;
     const container = payload(body).components[1]!;
 
     expect(container.components!.some((component) => component.type === 14)).toBe(false);

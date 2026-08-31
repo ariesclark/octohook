@@ -6,10 +6,12 @@ import { WebhookContent } from "../../types";
 import { displayUsername, Sha } from "../push/shared";
 import { pullRequestAction, pullRequestChanges, PullRequestEvent } from "./shared";
 
-const bodyActions = new Set(["opened", "reopened", "marked ready for review"]);
-
-/** What the pull request is called has been said by every message before these two. */
-const barePosts = new Set(["merged", "updated"]);
+/**
+ * A pull request is read when it is put up for review, so those two messages carry what it is
+ * called and what it says. Every other message is about a change of state, and the title has
+ * already been said above it.
+ */
+const readActions = new Set(["opened", "marked ready for review"]);
 
 function identity(event: PullRequestEvent) {
   const { sender } = event;
@@ -116,7 +118,7 @@ export function PullRequestMessage({
         ? "pull.updated_elsewhere"
         : (headlines[action] ?? "pull.other");
 
-  const open = bodyActions.has(action);
+  const open = readActions.has(action);
   const { components, truncated } = open
     ? briefBody(pull_request.body)
     : { components: [], truncated: false };
@@ -146,7 +148,7 @@ export function PullRequestMessage({
   return (
     <message {...identity(event)}>
       {headline}
-      {barePosts.has(action) ? (
+      {!readActions.has(action) ? (
         []
       ) : (
         <container>
