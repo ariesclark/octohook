@@ -302,6 +302,47 @@ describe("apply", () => {
     });
   });
 
+  // GitHub creates a `dynamic` run under a placeholder and renames it once the agent has a title.
+  test("takes the name a later event carries, since GitHub renames a run under way", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery(
+        "workflow_run",
+        "in_progress",
+        workflowRun(null, { name: "dynamic", event: "dynamic" }),
+      ),
+      { runId: "14244" },
+    );
+
+    apply(
+      world,
+      delivery(
+        "workflow_run",
+        "completed",
+        workflowRun("success", { name: "Running Copilot Code Review", event: "dynamic" }),
+      ),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual(world.runs.get("14244")!.run, {
+      name: "Running Copilot Code Review",
+      runNumber: 14244,
+      trigger: "dynamic",
+    });
+  });
+
+  test("keeps the name it holds when a later event names nothing", () => {
+    const world = emptyWorld();
+    apply(world, delivery("workflow_run", "in_progress", workflowRun(null)), { runId: "14244" });
+
+    apply(world, delivery("workflow_run", "completed", workflowRun("success", { name: "" })), {
+      runId: "14244",
+    });
+
+    assert.equal(world.runs.get("14244")!.run!.name, "Bot");
+  });
+
   test("remembers that a run went wrong once, however green it goes after", () => {
     const world = emptyWorld();
     apply(world, delivery("check_run", "completed", checkRun("build", "failure")), {

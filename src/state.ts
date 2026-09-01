@@ -324,8 +324,10 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     };
 
     const entry = run(world, resolved.runId, at, seen);
-    entry.run ??= resolved.run ?? {
-      name: workflow.name,
+    // GitHub renames a run under way — a `dynamic` one is created under a placeholder and titled
+    // once its agent has something to say — so the latest event names it, not the first.
+    entry.run = {
+      name: workflow.name || entry.run?.name || resolved.run?.name || "",
       runNumber: workflow.run_number,
       trigger: workflow.event,
     };
