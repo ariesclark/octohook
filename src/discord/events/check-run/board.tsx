@@ -69,7 +69,7 @@ export function RunBoard({
   const { run, branch, jobs, deployments, settled, startedAt, completedAt } = board;
 
   const rows = JobRows({ jobs, deployments, repositoryUrl: repository.html_url, sha: board.sha });
-  const summary = runSummary(jobs, deployments, { startedAt, completedAt });
+  const summary = runSummary(jobs, deployments, { startedAt, completedAt }, settled);
 
   const title = run
     ? `${workflowName(run.name)} #${run.runNumber} (${triggerLabel(run.trigger)})`
@@ -119,7 +119,7 @@ export function CommitBoard({
           sha: entry.sha,
         });
 
-        const summary = runSummary(entry.jobs, entry.deployments, entry);
+        const summary = runSummary(entry.jobs, entry.deployments, entry, entry.settled);
         const url = runUrl(repository.html_url, entry.runId);
 
         const title = entry.run

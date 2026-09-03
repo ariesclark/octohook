@@ -1,4 +1,4 @@
-import { t, tOf } from "../../messages.ts";
+import { t, tOf, type Phrase } from "../../messages.ts";
 import { summarise } from "../../../markdown/summary";
 import { annotationText, bySeverity, visible } from "./annotations.ts";
 import { fileUrl } from "./annotations.ts";
@@ -189,10 +189,14 @@ function Job({
   );
 }
 
+/** A verdict worth saying on its own, for a run holding no job to say it through. */
+const verdicts: Partial<Record<string, Phrase>> = { action_required: "run.action_required" };
+
 export function runSummary(
   jobs: BoardJob[],
   deployments: BoardDeployment[] = [],
   ran?: { startedAt?: string | null; completedAt?: string | null },
+  settled?: string | null,
 ): string | undefined {
   const deploying = deployments.filter(({ state }) => underway.has(state)).length;
   const shipping = deploying > 0 ? t("run.deploying", { count: deploying }) : undefined;
@@ -203,7 +207,10 @@ export function runSummary(
   const skipped = jobs.filter(({ conclusion }) => conclusion === "skipped").length;
   const passed = jobs.length - broken - running - skipped;
 
+  const held = settled ? verdicts[settled] : undefined;
+
   const counted = [
+    held && jobs.length === 0 ? t(held) : undefined,
     broken > 0 ? t("run.failed", { count: broken }) : undefined,
     running > 0 ? t("run.running", { count: running }) : undefined,
     passed > 0 ? t("run.passed", { count: passed }) : undefined,

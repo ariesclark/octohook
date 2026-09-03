@@ -127,3 +127,21 @@ describe("the clock on a run", () => {
     expect(runSummary([job("success")], [], ran)).toBe("1 passed in 17s");
   });
 });
+
+describe("a run held for approval", () => {
+  it("says what it is waiting on, having no jobs to count", () => {
+    expect(runSummary([], [], undefined, "action_required")).toBe("needs approval");
+  });
+
+  it("still counts jobs when it has them", () => {
+    const job = {
+      name: "build",
+      url: "u",
+      conclusion: "success",
+      startedAt: null,
+      completedAt: null,
+    };
+
+    expect(runSummary([job], [], undefined, "action_required")).toBe("1 passed");
+  });
+});

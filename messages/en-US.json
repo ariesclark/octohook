@@ -62,6 +62,7 @@
   "review.changes_requested": "requested changes on {$reference}",
   "review.comment": "commented on {$location}",
   "review.commented": "reviewed {$reference}",
+  "run.action_required": "needs approval",
   "run.checks": "checks",
   "run.deploying": ".input {$count :number}\n.match $count\n*   {{{$count} deploying}}",
   "run.failed": ".input {$count :number}\n.match $count\n*   {{{$count} failed}}",
