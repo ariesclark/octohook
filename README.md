@@ -57,6 +57,7 @@ Queries follow [liqe query syntax](https://github.com/gajus/liqe#query-syntax); 
 | `details` | what the board draws under the run: annotations, job summaries, deployments |
 | `annotations` | how many warnings or worse a reader would see |
 | `deployments` | how many environments it shipped to |
+| `attached` | whether it is drawn under the note it ran for, rather than on its own |
 | `seconds` | how long it ran |
 
 Four rules:
@@ -68,13 +69,13 @@ Four rules:
 
 #### Examples
 
-**Silence work that went fine and said nothing.** The one to put on every hook. A run draws while it is going, stays if it fails, and takes itself down when it finishes with nothing under it.
+**Silence work that went fine and said nothing.** The one to put on every hook. A run draws while it is going, stays if it fails, and takes itself down when it finishes with nothing under it — unless it is sitting under the push it ran for, where a green verdict is the news.
 
 ```
 ?preset=recommended
 ```
 
-`recommended` is a name for `exclude=type:run AND (ever:passed OR ever:skipped OR ever:cancelled) AND details:0`: the three ways a run finishes with nothing to say, and nothing written under it. `ever` rather than `result` keeps a board up after someone re-runs a failure green. A hook says the word rather than URL-encoding the sentence. Nothing is hidden in it: the `202` reports the query it resolved to under `drawing`, so GitHub's delivery pane shows what your hook is actually running, and a name spelled wrong is refused the way any unreadable query is.
+`recommended` is a name for `exclude=type:run AND (ever:passed OR ever:skipped OR ever:cancelled) AND details:0 AND attached:false`: the three ways a run finishes with nothing to say, nothing written under it, and nowhere to say it — a run folded into its push is kept, since there the green is what the push amounts to. `ever` rather than `result` keeps a board up after someone re-runs a failure green. A hook says the word rather than URL-encoding the sentence. Nothing is hidden in it: the `202` reports the query it resolved to under `drawing`, so GitHub's delivery pane shows what your hook is actually running, and a name spelled wrong is refused the way any unreadable query is.
 
 Write the query out yourself when it does not fit, and keep both if you like: a preset and your own `exclude` are joined with `OR`.
 

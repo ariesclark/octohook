@@ -28,6 +28,8 @@ export type RunSubject = {
   annotations: number;
   /** What it shipped, which is a different question from what it said. */
   deployments: number;
+  /** Whether it is drawn under the note it ran for, rather than standing on its own. */
+  attached: boolean;
   jobs: { total: number; failed: number; passed: number; running: number; skipped: number };
 };
 
@@ -58,6 +60,7 @@ const vocabulary = new Set([
   "details",
   "annotations",
   "deployments",
+  "attached",
   "jobs",
   "jobs.total",
   "jobs.failed",
@@ -89,7 +92,7 @@ function secondsOf(run: Run): number | undefined {
   return seconds > 0 ? seconds : undefined;
 }
 
-export function subjectOfRun(run: Run): RunSubject {
+export function subjectOfRun(run: Run, attached = false): RunSubject {
   const failed = run.jobs.filter(({ conclusion }) => broke(conclusion)).length;
   const running = run.jobs.filter(({ conclusion }) => !conclusion).length;
   const skipped = run.jobs.filter(({ conclusion }) => conclusion === "skipped").length;
@@ -112,6 +115,7 @@ export function subjectOfRun(run: Run): RunSubject {
     details: detailsUnder(run, annotations),
     annotations,
     deployments: run.deployments.length,
+    attached,
     jobs: {
       total: run.jobs.length,
       failed,

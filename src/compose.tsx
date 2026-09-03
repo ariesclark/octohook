@@ -133,7 +133,7 @@ export function compose(
 
     const runs = [...world.runs.values()]
       .filter((run) => owner.get(run.id) === note.key)
-      .filter((run) => asked(run.repository, subjectOfRun(run)))
+      .filter((run) => asked(run.repository, subjectOfRun(run, true)))
       .sort(
         (left, right) =>
           ranked(left).localeCompare(ranked(right)) || named(left).localeCompare(named(right)),
@@ -176,7 +176,7 @@ export function compose(
   for (const run of world.runs.values()) {
     if (claimed.has(run.id)) {
       if (!standalone.includes(run)) continue;
-    } else if (!asked(run.repository, subjectOfRun(run))) continue;
+    } else if (!asked(run.repository, subjectOfRun(run, false))) continue;
 
     composed.push({
       key: `run:${run.id}`,
