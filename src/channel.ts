@@ -22,6 +22,7 @@ import {
   type Run,
   type World,
 } from "./state.ts";
+import { annotationsUnder } from "./verdict.ts";
 
 type Meta = {
   secret: string;
@@ -60,6 +61,8 @@ export type Inspection = {
   pendingSince: number;
   trouble?: Trouble;
   holding: { notes: number; runs: number; drawn: number };
+  /** What each repository's messages are drawn by, which decides what the channel keeps. */
+  queries: Record<string, unknown>;
   notes: {
     key: string;
     kind: string;
@@ -81,11 +84,15 @@ export type Inspection = {
     cause?: string;
     /** What set the run off, which decides the kind of note it can belong to. */
     trigger?: string;
+    /** Which repository it belongs to, and so which of the channel's queries it answers to. */
+    repository?: string;
     name?: string;
     settled: string | null;
     stranded: boolean;
     jobs: number;
     unfinished: number;
+    /** Of its finished jobs: how many were asked GitHub for annotations, and what that kept. */
+    annotations: { asked: number; unasked: number; kept: number };
   }[];
 };
 
@@ -354,12 +361,14 @@ export class Channel extends DurableObject<CloudflareBindings> {
         branch: entry.branch,
         cause: entry.cause,
         trigger: entry.run?.trigger,
+        repository: entry.repository?.full_name ?? entry.repository?.name,
         name: entry.run ? entry.run.name : entry.title,
         settled: entry.settled ?? null,
         /** Every job finished, yet no completion ever settled the run: nothing will resolve it. */
         stranded: entry.settled === undefined && entry.jobs.every(({ conclusion }) => conclusion),
         jobs: entry.jobs.length,
         unfinished: entry.jobs.filter(({ conclusion }) => !conclusion).length,
+        annotations: annotationsUnder(entry),
       });
 
     return {
@@ -370,6 +379,12 @@ export class Channel extends DurableObject<CloudflareBindings> {
       pendingSince: kv.get<number>("pendingSince") ?? 0,
       trouble: kv.get<Trouble>("trouble"),
       holding: { notes: notes.length, runs: runs.length, drawn: held.size },
+      queries: Object.fromEntries(
+        [...kv.list<unknown>({ prefix: "query:" })].map(([key, value]) => [
+          key.slice("query:".length),
+          value,
+        ]),
+      ),
       notes: notes.map((note) => ({
         key: note.key,
         kind: note.kind,
