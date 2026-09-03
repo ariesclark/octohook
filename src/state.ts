@@ -12,7 +12,6 @@ export type Job = {
   /** What the annotations endpoint is asked for; only a check run ever names one. */
   checkRunId?: number;
   annotations?: Annotation[];
-  output?: { title?: string; summary?: string };
 };
 
 export type Deployment = {
@@ -80,9 +79,13 @@ export function ownerOf(
   run: Pick<Run, "sha" | "run" | "cause" | "branch">,
 ): Note | undefined {
   const trigger = run.run?.trigger ?? run.cause;
-  if (!run.sha || !trigger) return undefined;
+  if (!run.sha) return undefined;
 
-  const candidates = notes.filter((note) => note.sha === run.sha && note.kind === trigger);
+  // A check an app posts through the Checks API names no trigger, and GitHub leaves its
+  // `pull_requests` empty for a fork, so the commit it ran on is all there is to place it by.
+  const candidates = notes.filter(
+    (note) => note.sha === run.sha && (!trigger || note.kind === trigger),
+  );
 
   // Several pushes can carry one commit — a branch, the branch it merged into, a tag cut from it —
   // so a run belongs to whichever of them named the ref it ran on, rather than to the last to
@@ -296,7 +299,6 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       check_suite?: { head_branch?: string };
       app?: { name?: string };
       pull_requests?: Array<{ number?: number }>;
-      output?: { title?: string | null; summary?: string | null };
     };
 
     const entry = run(world, resolved.runId, at, seen);
@@ -317,10 +319,6 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       completedAt: check.completed_at,
       checkRunId: check.id,
       annotations: resolved.annotations,
-      output:
-        check.output?.title || check.output?.summary
-          ? { title: check.output.title ?? undefined, summary: check.output.summary ?? undefined }
-          : undefined,
     };
 
     const said = upsertJob(entry, job);

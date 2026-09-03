@@ -562,10 +562,10 @@ describe("a check no workflow owns", () => {
     );
   });
 
-  test("gives a check with no cause to nobody", () => {
+  test("gives a check with no cause to the commit it ran on", () => {
     const notes = [note("a", "pull_request", "abc1234")];
 
-    assert.equal(ownerOf(notes, { sha: "abc1234" }), undefined);
+    assert.equal(ownerOf(notes, { sha: "abc1234" })?.key, "a");
   });
 });
 
@@ -1020,5 +1020,32 @@ describe("how long a run took", () => {
     apply(world, started(undefined, "completed", "success"), { runId: "14244" });
 
     assert.equal(world.runs.get("14244")!.startedAt, "2026-09-03T07:25:22Z");
+  });
+});
+
+describe("a check an app posted for itself", () => {
+  const note = (kind: string, at: string, sha: string, ref?: string): Note => ({
+    key: `${kind}.:${at}`,
+    at,
+    seen: at,
+    kind,
+    sha,
+    content: {},
+    ...(ref ? { facts: { ref } } : {}),
+  });
+
+  test("belongs to the commit it ran on, naming no trigger of its own", () => {
+    const notes = [note("pull_request", "01:00", "abc1234")];
+
+    assert.equal(ownerOf(notes, { sha: "abc1234" })?.key, "pull_request.:01:00");
+  });
+
+  test("still keeps a run to the kind of note its trigger names", () => {
+    const notes = [note("pull_request", "01:00", "abc1234")];
+
+    assert.equal(
+      ownerOf(notes, { sha: "abc1234", run: { name: "CI", runNumber: 1, trigger: "push" } }),
+      undefined,
+    );
   });
 });

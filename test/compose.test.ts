@@ -249,16 +249,16 @@ describe("a check an app posted", () => {
 
     expect(rest).toEqual([]);
     expect(message!.key).toBe("pull_request.opened:2026-08-24T01:00:00Z");
-    expect(JSON.stringify(message!.content)).toContain("CodeQL");
+    expect(JSON.stringify(message!.content)).toContain("GitHub Advanced Security");
   });
 
-  it("keeps its own board when it names no pull request", () => {
+  it("folds into the commit it ran on even when it names no pull request", () => {
     const built = scanned(opened(emptyWorld()), []);
+    const [message, ...rest] = compose(built, repository);
 
-    expect(compose(built, repository).map(({ key }) => key)).toEqual([
-      "pull_request.opened:2026-08-24T01:00:00Z",
-      "run:suite-89099420345",
-    ]);
+    expect(rest).toEqual([]);
+    expect(message!.key).toBe("pull_request.opened:2026-08-24T01:00:00Z");
+    expect(JSON.stringify(message!.content)).toContain("GitHub Advanced Security");
   });
 
   it("never draws the suite it was keyed by", () => {
