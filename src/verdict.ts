@@ -33,3 +33,18 @@ export function detailsUnder(
 ): number {
   return warnings + run.jobs.filter(said).length + arrived(run.deployments).length;
 }
+
+/** Whether a finished job was ever asked for annotations, which a count of them cannot tell apart. */
+export function annotationsUnder(run: Pick<Run, "jobs">): {
+  asked: number;
+  unasked: number;
+  kept: number;
+} {
+  const finished = run.jobs.filter(({ conclusion }) => conclusion);
+
+  return {
+    asked: finished.filter(({ annotations }) => annotations !== undefined).length,
+    unasked: finished.filter(({ annotations }) => annotations === undefined).length,
+    kept: finished.reduce((count, { annotations }) => count + (annotations?.length ?? 0), 0),
+  };
+}

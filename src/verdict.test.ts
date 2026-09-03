@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { wrong } from "./verdict.ts";
+import { annotationsUnder, wrong } from "./verdict.ts";
 import type { Run } from "./state.ts";
 
 function run(trigger: string | undefined, over: Partial<Run> = {}): Run {
@@ -53,5 +53,33 @@ describe("wrong", () => {
 
   test("lets a superseded run go quietly", () => {
     assert.equal(wrong(run("schedule", { jobs: [job("cancelled")] })), false);
+  });
+});
+
+describe("annotationsUnder", () => {
+  const annotation = { path: "a.cs", startLine: 1, level: "warning", title: null, message: "m" };
+
+  test("tells a job never asked for annotations from one asked and told nothing", () => {
+    const jobs = [
+      { ...job("failure"), annotations: undefined },
+      { ...job("failure"), annotations: [] },
+      { ...job("success"), annotations: [annotation] },
+    ];
+
+    assert.deepEqual(annotationsUnder(run("schedule", { jobs })), {
+      asked: 2,
+      unasked: 1,
+      kept: 1,
+    });
+  });
+
+  test("leaves a job still running out, having nothing to say yet", () => {
+    const jobs = [{ ...job(null), annotations: undefined }];
+
+    assert.deepEqual(annotationsUnder(run("schedule", { jobs })), {
+      asked: 0,
+      unasked: 0,
+      kept: 0,
+    });
   });
 });
