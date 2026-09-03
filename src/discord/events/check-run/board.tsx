@@ -1,3 +1,5 @@
+import { ButtonStyle } from "discord-api-types/v10";
+
 import { Ref } from "../../components/ref";
 import { checkMark, lead, marks } from "../../marks";
 import { t } from "../../messages.ts";
@@ -57,6 +59,13 @@ export function boardMark(
   return marks.good;
 }
 
+/** A run held for approval is acted on in one place, so the board carries the way there. */
+function held(settled: string | null | undefined, url: string | undefined) {
+  if (settled !== "action_required" || !url) return undefined;
+
+  return <button style={ButtonStyle.Link} url={url} label={t("run.approve")} />;
+}
+
 export function RunBoard({
   board,
   repository,
@@ -77,25 +86,39 @@ export function RunBoard({
 
   const ref = branch ? preferredRef(branch) : undefined;
   const url = runUrl(repository.html_url, board.runId);
+  const approve = held(settled, url);
+
+  const headline = (
+    <>
+      {"-# "}
+      {lead(boardMark(jobs, deployments, settled))}
+      <b>{url ? <a href={url}>{title}</a> : title}</b>
+      {ref ? (
+        <>
+          {" on "}
+          <Ref repository={repository} refName={ref} hook={hook} />
+        </>
+      ) : (
+        ""
+      )}
+      {summary ? ` • ${summary}` : ""}
+    </>
+  );
 
   return (
     <message username="GitHub Actions" avatar_url={actionsAvatarUrl}>
-      <text>
-        {"-# "}
-        {lead(boardMark(jobs, deployments, settled))}
-        <b>{url ? <a href={url}>{title}</a> : title}</b>
-        {ref ? (
-          <>
-            {" on "}
-            <Ref repository={repository} refName={ref} hook={hook} />
-          </>
-        ) : (
-          ""
-        )}
-        {summary ? ` • ${summary}` : ""}
-        {rows.length > 0 ? <br /> : ""}
-        {rows}
-      </text>
+      {approve ? (
+        <section accessory={approve}>
+          <text>{headline}</text>
+          {rows.length > 0 ? <text>{rows}</text> : []}
+        </section>
+      ) : (
+        <text>
+          {headline}
+          {rows.length > 0 ? <br /> : ""}
+          {rows}
+        </text>
+      )}
     </message>
   );
 }
@@ -126,15 +149,30 @@ export function CommitBoard({
           ? `${workflowName(entry.run.name)} #${entry.run.runNumber}`
           : (entry.title ?? t("run.checks"));
 
-        return [
-          <text>
+        const approve = held(entry.settled, url);
+
+        const headline = (
+          <>
             {"-# "}
             {lead(boardMark(entry.jobs, entry.deployments, entry.settled))}
             <b>{url ? <a href={url}>{title}</a> : title}</b>
             {summary ? ` • ${summary}` : ""}
-            {rows.length > 0 ? <br /> : ""}
-            {rows}
-          </text>,
+          </>
+        );
+
+        return [
+          approve ? (
+            <section accessory={approve}>
+              <text>{headline}</text>
+              {rows.length > 0 ? <text>{rows}</text> : []}
+            </section>
+          ) : (
+            <text>
+              {headline}
+              {rows.length > 0 ? <br /> : ""}
+              {rows}
+            </text>
+          ),
         ];
       })}
     </message>
