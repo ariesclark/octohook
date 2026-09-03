@@ -1,4 +1,3 @@
-import { issueMark, lead } from "../../marks";
 import { t, type Phrase } from "../../messages.ts";
 import { WebhookContent } from "../../types";
 import { displayUsername } from "../push/shared";
@@ -21,7 +20,6 @@ export function IssueNatural({ event }: { event: IssuesEvent }): WebhookContent 
     <message username={displayUsername(sender.login)} avatar_url={sender.avatar_url}>
       <text>
         <b>
-          {lead(issueMark(action, issue.state_reason))}
           {t(closedAsNotPlanned ? "issue.not_planned" : (headlines[action] ?? "issue.other"), {
             action,
             issue: (

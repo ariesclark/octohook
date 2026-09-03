@@ -48,13 +48,6 @@ export function deploymentMark(state: string | null | undefined): Mark {
   return deploymentStates[state] ?? marks.quiet;
 }
 
-export function issueMark(action: string, reason: string | null | undefined): Mark {
-  if (action === "closed") return reason === "not_planned" ? marks.dropped : marks.good;
-  if (action === "opened" || action === "reopened") return marks.quiet;
-
-  return marks.quiet;
-}
-
 const severities: Record<string, Mark> = {
   critical: marks.bad,
   high: marks.bad,

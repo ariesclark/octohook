@@ -1,6 +1,5 @@
 import { GithubEvent } from "../../../github";
 import { Ref } from "../../components/ref";
-import { lead, marks } from "../../marks";
 import { t } from "../../messages.ts";
 import { HookScope } from "../../refs";
 import { WebhookContent } from "../../types";
@@ -16,7 +15,6 @@ export function getDeleteContent(event: DeleteEvent, hook: HookScope): WebhookCo
     <message username={displayUsername(sender.login)} avatar_url={sender.avatar_url}>
       <text>
         <b>
-          {lead(marks.dropped)}
           {t(type === "tag" ? "delete.tag" : "delete.branch", {
             ref: <Ref repository={repository} refName={ref} hook={hook} />,
           })}

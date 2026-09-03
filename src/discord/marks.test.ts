@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  checkMark,
-  deploymentMark,
-  issueMark,
-  marks,
-  severityMark,
-  vulnerabilityMark,
-} from "./marks.ts";
+import { checkMark, deploymentMark, marks, severityMark, vulnerabilityMark } from "./marks.ts";
 
 describe("marks", () => {
   it("gives every state a distinct mark", () => {
@@ -65,18 +58,6 @@ describe("deploymentMark", () => {
   it("reads failure and error alike", () => {
     assert.equal(deploymentMark("failure"), marks.bad);
     assert.equal(deploymentMark("error"), marks.bad);
-  });
-});
-
-describe("issueMark", () => {
-  it("reads a resolved issue as good and an abandoned one as dropped", () => {
-    assert.equal(issueMark("closed", "completed"), marks.good);
-    assert.equal(issueMark("closed", "not_planned"), marks.dropped);
-  });
-
-  it("reads an open issue as active", () => {
-    assert.equal(issueMark("opened", null), marks.quiet);
-    assert.equal(issueMark("reopened", null), marks.quiet);
   });
 });
 
