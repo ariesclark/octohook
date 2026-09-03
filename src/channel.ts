@@ -15,6 +15,7 @@ import {
   apply,
   applyJobs,
   forget,
+  awaiting,
   noteKeyOf,
   unswept,
   watching,
@@ -356,14 +357,24 @@ export class Channel extends DurableObject<CloudflareBindings> {
     // A run no event ever settled is asked outright: with no jobs of its own, nothing else says
     // whether it finished, was cancelled, or is being held for approval.
     for (const entry of runs) {
-      if (entry.settled !== undefined) continue;
+      if (!awaiting(entry.settled)) continue;
 
       const found = await github.watchRun({
         repository: entry.repository!.full_name!,
         runId: entry.id,
       });
 
-      if (found?.status !== "completed") continue;
+      if (!found) continue;
+
+      // Approval sets a run going again, so the wait is over well before a verdict is.
+      if (found.status !== "completed") {
+        if (entry.settled === "action_required") {
+          entry.settled = undefined;
+          moved = true;
+        }
+
+        continue;
+      }
 
       entry.settled = found.conclusion;
       moved = true;

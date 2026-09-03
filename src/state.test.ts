@@ -674,6 +674,34 @@ describe("watching", () => {
     );
   });
 
+  test("keeps watching a run held for approval, which is a wait and not a verdict", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("workflow_run", "completed", {
+        ...workflowRun("action_required"),
+        repository: somewhere,
+      }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual(
+      watching(world).map(({ id }) => id),
+      ["14244"],
+    );
+  });
+
+  test("lets a run go once it reaches a verdict of its own", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("workflow_run", "completed", { ...workflowRun("success"), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual(watching(world), []);
+  });
+
   test("does not watch a run nothing has reported a job for", () => {
     const world = emptyWorld();
     apply(
@@ -917,5 +945,48 @@ describe("checks that gathered under a suite of their own", () => {
     );
 
     assert.deepEqual([...world.runs.keys()].sort(), ["14244", "suite-5"]);
+  });
+});
+
+describe("a run that was held for approval", () => {
+  const somewhere = { name: "r", full_name: "o/r", html_url: "https://github.com/o/r" };
+
+  test("stops being held once it is under way again", () => {
+    const world = emptyWorld();
+
+    apply(
+      world,
+      delivery("workflow_run", "completed", {
+        ...workflowRun("action_required"),
+        repository: somewhere,
+      }),
+      { runId: "14244" },
+    );
+
+    apply(
+      world,
+      delivery("workflow_run", "in_progress", { ...workflowRun(null), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    assert.equal(world.runs.get("14244")!.settled, undefined);
+  });
+
+  test("keeps a verdict it already reached when it starts over", () => {
+    const world = emptyWorld();
+
+    apply(
+      world,
+      delivery("workflow_run", "completed", { ...workflowRun("failure"), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    apply(
+      world,
+      delivery("workflow_run", "in_progress", { ...workflowRun(null), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    assert.equal(world.runs.get("14244")!.settled, "failure");
   });
 });

@@ -159,6 +159,7 @@ export function compose(
     const board = CommitBoard({
       entries: runs.map(toBoard) as CommitBoardEntry[],
       repository: note.repository ?? runs[0]?.repository ?? repository,
+      pull: note.facts?.pull,
     }) as { components?: unknown[] };
 
     const content = withComments(note) as { components?: unknown[] };

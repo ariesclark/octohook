@@ -9,7 +9,9 @@ export type Folded = Delivery & {
 /** Read where the whole event still exists, since the fold keeps none of it. */
 export function factsOf(payload: Payload): Facts | undefined {
   const sender = payload.sender as { login?: string; type?: string } | undefined;
-  const pull = payload.pull_request as { merged?: boolean; draft?: boolean } | undefined;
+  const pull = payload.pull_request as
+    | { merged?: boolean; draft?: boolean; html_url?: string }
+    | undefined;
 
   const ref = ((payload.ref ?? payload.base_ref) as string | undefined)?.replace(
     /^refs\/(heads|tags)\//,
@@ -21,6 +23,7 @@ export function factsOf(payload: Payload): Facts | undefined {
     ref: ref ?? (payload.pull_request as { head?: { ref?: string } } | undefined)?.head?.ref,
     merged: pull?.merged,
     draft: pull?.draft,
+    pull: pull?.html_url,
   };
 
   return Object.values(facts).some((value) => value !== undefined) ? facts : undefined;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { boardMark } from "../src/discord/events/check-run/board";
+import { CommitBoard } from "../src/discord/events/check-run/board";
 import { JobRows, runSummary } from "../src/discord/events/check-run/rows";
 import { marks } from "../src/discord/marks";
 
@@ -143,5 +144,38 @@ describe("a run held for approval", () => {
     };
 
     expect(runSummary([job], [], undefined, "action_required")).toBe("1 passed");
+  });
+});
+
+describe("a board whose run was held", () => {
+  const repository = { name: "r", html_url: "https://github.com/o/r" };
+
+  const button = (content: unknown) =>
+    /"type":2,"style":5/.test(JSON.stringify(content)) ? "button" : "no button";
+
+  const entry = (jobs: unknown[]) => ({
+    runId: "900",
+    run: { name: "CI", runNumber: 15, trigger: "pull_request" },
+    jobs,
+    deployments: [],
+    settled: "action_required",
+  });
+
+  const job = (conclusion: string | null) => ({
+    name: "bundle",
+    url: "u",
+    conclusion,
+    startedAt: null,
+    completedAt: null,
+  });
+
+  it("offers approval while nothing of it is running", () => {
+    expect(button(CommitBoard({ entries: [entry([])] as never, repository }))).toBe("button");
+  });
+
+  it("drops the offer once the run is under way, whatever it was last told", () => {
+    expect(button(CommitBoard({ entries: [entry([job(null)])] as never, repository }))).toBe(
+      "no button",
+    );
   });
 });

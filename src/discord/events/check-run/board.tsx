@@ -59,12 +59,30 @@ export function boardMark(
   return marks.good;
 }
 
-/** A run held for approval is acted on in one place, so the board carries the way there. */
-function held(settled: string | null | undefined, url: string | undefined) {
-  if (settled !== "action_required" || !url) return undefined;
+/** A run with work under way is plainly not waiting on anyone, whatever it was last told. */
+function holding(board: { settled?: string | null; jobs: BoardJob[] }): boolean {
+  return board.settled === "action_required" && !board.jobs.some(({ conclusion }) => !conclusion);
+}
 
+/** A run held for approval is acted on in one place, so the board carries the way there. */
+function approval(url: string) {
   return <button style={ButtonStyle.Link} url={url} label={t("run.approve")} />;
 }
+
+/**
+ * One approval covers every run pending on a pull request's current commit, and it is given on the
+ * pull request rather than on any one run.
+ * https://docs.github.com/en/actions/how-tos/manage-workflow-runs/approve-runs-from-forks
+ */
+const approvedAt = (group: CommitBoardEntry[], repositoryUrl: string, pull?: string) => {
+  const [first] = group;
+
+  if (group.length === 1 && first) return runUrl(repositoryUrl, first.runId);
+  return pull ? `${pull}#new_comment_field` : undefined;
+};
+
+/** A section takes three text displays at most, so a longer run of them is broken up. */
+const mostHeld = 3;
 
 export function RunBoard({
   board,
@@ -86,7 +104,7 @@ export function RunBoard({
 
   const ref = branch ? preferredRef(branch) : undefined;
   const url = runUrl(repository.html_url, board.runId);
-  const approve = held(settled, url);
+  const approve = holding(board) && url ? approval(url) : undefined;
 
   const headline = (
     <>
@@ -125,55 +143,70 @@ export function RunBoard({
 
 export type CommitBoardEntry = Board & { runId: string };
 
+/** Runs held for approval stand together, so one button answers for the lot of them. */
+function grouped(entries: CommitBoardEntry[]): CommitBoardEntry[][] {
+  const groups: CommitBoardEntry[][] = [];
+
+  for (const entry of entries) {
+    const last = groups[groups.length - 1];
+
+    const first = last?.[0];
+    const joins = last && first && holding(first) && holding(entry) && last.length < mostHeld;
+
+    if (joins) last.push(entry);
+    else groups.push([entry]);
+  }
+
+  return groups;
+}
+
 export function CommitBoard({
   entries,
   repository,
+  pull,
 }: {
   entries: CommitBoardEntry[];
   repository: { name: string; full_name?: string; html_url: string };
+  pull?: string;
 }): WebhookContent {
   return (
     <message username="GitHub Actions" avatar_url={actionsAvatarUrl}>
-      {entries.flatMap((entry) => {
-        const rows = JobRows({
-          jobs: entry.jobs,
-          deployments: entry.deployments,
-          repositoryUrl: repository.html_url,
-          sha: entry.sha,
-        });
+      {grouped(entries).flatMap((group) => {
+        const drawn = group.map((entry) => {
+          const rows = JobRows({
+            jobs: entry.jobs,
+            deployments: entry.deployments,
+            repositoryUrl: repository.html_url,
+            sha: entry.sha,
+          });
 
-        const summary = runSummary(entry.jobs, entry.deployments, entry, entry.settled);
-        const url = runUrl(repository.html_url, entry.runId);
+          const summary = runSummary(entry.jobs, entry.deployments, entry, entry.settled);
+          const url = runUrl(repository.html_url, entry.runId);
 
-        const title = entry.run
-          ? `${workflowName(entry.run.name)} #${entry.run.runNumber}`
-          : (entry.title ?? t("run.checks"));
+          const title = entry.run
+            ? `${workflowName(entry.run.name)} #${entry.run.runNumber}`
+            : (entry.title ?? t("run.checks"));
 
-        const approve = held(entry.settled, url);
-
-        const headline = (
-          <>
-            {"-# "}
-            {lead(boardMark(entry.jobs, entry.deployments, entry.settled))}
-            <b>{url ? <a href={url}>{title}</a> : title}</b>
-            {summary ? ` • ${summary}` : ""}
-          </>
-        );
-
-        return [
-          approve ? (
-            <section accessory={approve}>
-              <text>{headline}</text>
-              {rows.length > 0 ? <text>{rows}</text> : []}
-            </section>
-          ) : (
+          return (
             <text>
-              {headline}
+              {"-# "}
+              {lead(boardMark(entry.jobs, entry.deployments, entry.settled))}
+              <b>{url ? <a href={url}>{title}</a> : title}</b>
+              {summary ? ` • ${summary}` : ""}
               {rows.length > 0 ? <br /> : ""}
               {rows}
             </text>
-          ),
-        ];
+          );
+        });
+
+        const first = group[0];
+
+        const where =
+          first && holding(first) ? approvedAt(group, repository.html_url, pull) : undefined;
+
+        if (!where) return drawn;
+
+        return [<section accessory={approval(where)}>{drawn}</section>];
       })}
     </message>
   );

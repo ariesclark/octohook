@@ -58,6 +58,8 @@ export type Facts = {
   ref?: string;
   merged?: boolean;
   draft?: boolean;
+  /** The pull request the note is about, which is where its runs are approved. */
+  pull?: string;
 };
 
 export type Note = {
@@ -230,13 +232,18 @@ export function unswept(entry: Run): Job[] {
   );
 }
 
+/** Being held for approval is a wait, not a verdict: the run has not finished saying anything. */
+export function awaiting(settled: string | null | undefined): boolean {
+  return settled === undefined || settled === "action_required";
+}
+
 export function watching(world: World): Run[] {
   return [...world.runs.values()].filter(
     (entry) =>
       entry.repository?.full_name &&
       // A run GitHub never settled is owed a verdict, and a run holding no job at all will never
       // be brought one by its own checks — both have to be asked for.
-      (entry.settled === undefined ||
+      (awaiting(entry.settled) ||
         (entry.jobs.length > 0 &&
           (entry.jobs.some(({ conclusion }) => !conclusion) || unswept(entry).length > 0))),
   );
@@ -386,6 +393,9 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.startedAt ??= workflow.run_started_at;
     // `updated_at` moves while the run is going, so it only reads as an end once there is a verdict.
     entry.completedAt = workflow.conclusion ? workflow.updated_at : undefined;
+    // Approval sets a run going again, so the wait it was under is over.
+    if (entry.settled === "action_required") entry.settled = undefined;
+
     // Only a finish settles a run: being asked for or getting under way carries no verdict, and
     // saying so would read as a run that ended without one.
     if (action !== "completed") return `run is ${action}`;
