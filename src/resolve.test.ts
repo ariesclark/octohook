@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { localReferenceFor, resolveFor } from "./resolve.ts";
+import { localReferenceFor, referenceFor, resolveFor } from "./resolve.ts";
 import type { Annotation, Github } from "./discord/events/check-run/run.ts";
 import type { Delivery } from "./state.ts";
 
@@ -116,5 +116,37 @@ describe("what a check run resolves to", () => {
     );
 
     assert.deepEqual(resolved.annotations, []);
+  });
+});
+
+describe("a check whose suite names no workflow run", () => {
+  function lost(): Github {
+    return {
+      resolveRun: async () => undefined,
+      runReferenceFromSuite: async () => undefined,
+      resolveAnnotations: async () => [],
+      watchJobs: async () => ({}),
+    };
+  }
+
+  test("drops the suite, which owns a verdict and none of the jobs under it", async () => {
+    const reference = await referenceFor(
+      delivery("check_suite", { repository: { full_name: "o/r" }, check_suite: { id: 5 } }),
+      lost(),
+    );
+
+    assert.equal(reference, undefined);
+  });
+
+  test("keeps gathering checks, which is all an app posting its own ever has", async () => {
+    const reference = await referenceFor(
+      delivery("check_run", {
+        repository: { full_name: "o/r" },
+        check_run: { check_suite: { id: 5 } },
+      }),
+      lost(),
+    );
+
+    assert.deepEqual(reference, { repository: "o/r", runId: "suite-5" });
   });
 });

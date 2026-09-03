@@ -52,8 +52,12 @@ export async function referenceFor(
   const found = await github.runReferenceFromSuite(repository, suite);
   if (found) return found;
 
-  // The suite named no run, so its checks gather under an identity of their own — and a later
-  // `workflow_run.completed` settles the run's id instead, leaving these unsettled.
+  // A suite carries a verdict and none of the jobs beneath it, which arrive as checks that name
+  // their own run. Gathering one GitHub will not name draws a second board owning nothing.
+  if (delivery.event === "check_suite") return undefined;
+
+  // A check gathers under an identity of its own, since an app posting through the Checks API has
+  // no workflow run to be named by — and a later `workflow_run` takes these back.
   console.log({
     level: "warn",
     at: "referenceFor",
