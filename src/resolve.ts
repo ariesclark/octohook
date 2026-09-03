@@ -6,7 +6,7 @@ import {
 } from "./discord/events/check-run/run.ts";
 import type { Delivery, Resolved } from "./state.ts";
 
-type CheckRun = { id: number; status: string; output?: { annotations_count?: number } };
+type CheckRun = { id: number; status: string };
 
 export function localReferenceFor(delivery: Delivery): RunReference | undefined {
   const { payload, event } = delivery;
@@ -77,16 +77,18 @@ export async function resolveFor(
   const reference = await referenceFor(delivery, github);
   if (!reference) return { content: await renderNote() };
 
-  // A running check has no annotations yet.
+  // A running check has no annotations yet. A finished one is asked whatever its own count says,
+  // since that count trails the annotations the runner files against it.
   const check = (delivery.payload as { check_run?: CheckRun }).check_run;
-  const says = (check?.output?.annotations_count ?? 0) > 0 && check?.status === "completed";
+
+  const found =
+    check?.status === "completed"
+      ? await github.resolveAnnotations(reference.repository, check.id)
+      : undefined;
 
   return {
     runId: reference.runId,
     run: await github.resolveRun(reference),
-    annotations:
-      says && check
-        ? worthSaying(await github.resolveAnnotations(reference.repository, check.id))
-        : undefined,
+    annotations: found && worthSaying(found),
   };
 }

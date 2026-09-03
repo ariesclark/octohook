@@ -216,9 +216,13 @@ describe("Channel", () => {
       deliveries: [job(secondsAgo(30), "abc1234", "build", "success")],
     });
 
-    expect(lookups).toHaveLength(1);
-    expect(lookups[0]!.url).toContain("/actions/runs/900");
-    expect(lookups[0]!.authorization).toBe("Bearer a-particular-token");
+    expect(lookups.map(({ url }) => new URL(url).pathname).sort()).toEqual([
+      "/repos/flirtual/flirtual/actions/runs/900",
+      "/repos/flirtual/flirtual/check-runs/1/annotations",
+    ]);
+    expect(
+      lookups.every(({ authorization }) => authorization === "Bearer a-particular-token"),
+    ).toBe(true);
   });
 
   it("looks nothing up when the hook carries no token", async () => {

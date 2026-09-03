@@ -80,7 +80,6 @@ const carried: Record<string, string[]> = {
     "check_run.pull_requests",
     "check_run.output.title",
     "check_run.output.summary",
-    "check_run.output.annotations_count",
   ],
   check_suite: [
     ...repository,

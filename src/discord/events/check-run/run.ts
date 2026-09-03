@@ -47,7 +47,8 @@ export type Watched = { etag?: string; jobs?: ReportedJob[] };
 export type Github = {
   resolveRun(reference: RunReference): Promise<ResolvedRun | undefined>;
   runReferenceFromSuite(repository: string, suiteId: number): Promise<RunReference | undefined>;
-  resolveAnnotations(repository: string, checkRunId: number): Promise<Annotation[]>;
+  /** Undefined means GitHub would not say, which is not the same as having nothing to say. */
+  resolveAnnotations(repository: string, checkRunId: number): Promise<Annotation[] | undefined>;
   /** Undefined jobs means nothing moved: a 304 costs no rate limit. */
   watchJobs(reference: RunReference, etag?: string): Promise<Watched>;
 };
@@ -126,7 +127,10 @@ export function createGithub(token?: string): Github {
       return request;
     },
 
-    async resolveAnnotations(repository: string, checkRunId: number): Promise<Annotation[]> {
+    async resolveAnnotations(
+      repository: string,
+      checkRunId: number,
+    ): Promise<Annotation[] | undefined> {
       const annotations = await get<
         Array<{
           path: string;
@@ -137,7 +141,9 @@ export function createGithub(token?: string): Github {
         }>
       >(`/repos/${repository}/check-runs/${checkRunId}/annotations`);
 
-      return (annotations ?? []).map(({ path, start_line, annotation_level, title, message }) => ({
+      if (!annotations) return undefined;
+
+      return annotations.map(({ path, start_line, annotation_level, title, message }) => ({
         path,
         startLine: start_line,
         level: annotation_level,
