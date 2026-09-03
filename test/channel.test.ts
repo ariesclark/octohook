@@ -632,3 +632,68 @@ describe("a deployment the board is watching", () => {
     expect(lines(patches()[0] ?? posts()[0]!)).not.toContain("deploying");
   });
 });
+
+describe("checks that gathered under a suite of their own", () => {
+  const workflowRun = (checkSuiteId: number): Folded => ({
+    event: "workflow_run",
+    action: "requested",
+    delivered_at: secondsAgo(30),
+    received_at: secondsAgo(30),
+    payload: foldablePayload("workflow_run", {
+      repository,
+      workflow_run: {
+        id: 900,
+        check_suite_id: checkSuiteId,
+        name: "CI",
+        run_number: 12,
+        event: "push",
+        conclusion: null,
+        head_sha: "abc1234",
+        head_branch: "main",
+      },
+    }),
+  });
+
+  const stray = {
+    id: "suite-5",
+    at: secondsAgo(60),
+    seen: secondsAgo(60),
+    repository,
+    sha: "abc1234",
+    branch: "main",
+    settled: "failure",
+    jobs: [{ name: "build", url: "u", conclusion: "failure", startedAt: null, completedAt: null }],
+    deployments: [],
+  };
+
+  it("are taken back by the workflow run, and the run they gathered under is forgotten", async () => {
+    const object = stub();
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      state.storage.kv.put("run:suite-5", stray);
+    });
+
+    await deliver(object, [workflowRun(5)]);
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      expect(state.storage.kv.get("run:suite-5")).toBeUndefined();
+
+      const held = state.storage.kv.get<{ jobs: Array<{ name: string }> }>("run:900");
+      expect(held?.jobs.map(({ name }) => name)).toEqual(["build"]);
+    });
+  });
+
+  it("leaves a suite the workflow run does not name alone", async () => {
+    const object = stub();
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      state.storage.kv.put("run:suite-5", stray);
+    });
+
+    await deliver(object, [workflowRun(9)]);
+
+    await runInDurableObject(object, async (_instance: Channel, state) => {
+      expect(state.storage.kv.get("run:suite-5")).toBeDefined();
+    });
+  });
+});

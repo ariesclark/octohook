@@ -117,6 +117,7 @@ const carried: Record<string, string[]> = {
   workflow_run: [
     ...repository,
     "workflow_run.id",
+    "workflow_run.check_suite_id",
     "workflow_run.name",
     "workflow_run.run_number",
     "workflow_run.event",

@@ -181,6 +181,31 @@ function jobOf(reported: ReportedJob): Job {
   };
 }
 
+/**
+ * Checks whose suite named no run of its own gather under `suite-<id>`, which owns nothing and can
+ * belong to no note. The workflow run says which suite it ran, so it takes them back.
+ */
+function adopt(world: World, entry: Run, suiteId: number | undefined): void {
+  if (suiteId === undefined) return;
+
+  const key = `suite-${suiteId}`;
+  if (key === entry.id) return;
+
+  const stray = world.runs.get(key);
+  if (!stray) return;
+
+  for (const job of stray.jobs) upsertJob(entry, job);
+
+  const shipped = new Set(entry.deployments.map(({ id }) => id));
+  for (const deployment of stray.deployments)
+    if (!shipped.has(deployment.id)) entry.deployments.push(deployment);
+
+  entry.alarmed ??= stray.alarmed;
+  entry.startedAt ??= stray.startedAt;
+
+  world.runs.delete(key);
+}
+
 function latch(entry: Run): void {
   if (wrong(entry)) entry.alarmed = true;
 }
@@ -334,6 +359,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       name: string;
       run_number: number;
       event: string;
+      check_suite_id?: number;
       conclusion: string | null;
       head_sha?: string;
       head_branch?: string;
@@ -342,6 +368,8 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     };
 
     const entry = run(world, resolved.runId, at, seen);
+    adopt(world, entry, workflow.check_suite_id);
+
     // GitHub renames a run under way — a `dynamic` one is created under a placeholder and titled
     // once its agent has something to say — so the latest event names it, not the first.
     entry.run = {

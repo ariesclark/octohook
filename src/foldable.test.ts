@@ -47,3 +47,14 @@ describe("a workflow run", () => {
     assert.equal(folded.repository.full_name, "o/wiki-bot");
   });
 });
+
+describe("what a fold keeps of a workflow run", () => {
+  test("keeps the suite it ran, which is how its stray checks find their way back", () => {
+    const kept = foldablePayload("workflow_run", {
+      repository: { name: "r", full_name: "o/r", html_url: "https://github.com/o/r" },
+      workflow_run: { id: 14244, name: "CI", check_suite_id: 5 },
+    }) as { workflow_run?: { check_suite_id?: number } };
+
+    assert.equal(kept.workflow_run?.check_suite_id, 5);
+  });
+});

@@ -154,12 +154,25 @@ export class Channel extends DurableObject<CloudflareBindings> {
     this.#migrate();
 
     const world: World = { runs: new Map(), notes: kv.get<Note[]>("notes") ?? [] };
+    const loaded = new Set<string>();
 
-    for (const [, values] of resolved) {
-      if (!values.runId) continue;
+    const hold = (id: string) => {
+      const held = kv.get<Run>(`run:${id}`);
+      if (!held) return;
 
-      const held = kv.get<Run>(`run:${values.runId}`);
-      if (held) world.runs.set(values.runId, held);
+      world.runs.set(id, held);
+      loaded.add(id);
+    };
+
+    for (const [delivery, values] of resolved) {
+      if (values.runId) hold(values.runId);
+
+      // A workflow run takes back the checks that gathered under its suite, and they are filed
+      // under a run of their own rather than beside it.
+      const suite = (delivery.payload.workflow_run as { check_suite_id?: number } | undefined)
+        ?.check_suite_id;
+
+      if (suite !== undefined) hold(`suite-${suite}`);
     }
 
     let last = kv.get<Meta>("meta")?.repository;
@@ -183,6 +196,7 @@ export class Channel extends DurableObject<CloudflareBindings> {
     const flushAt = Math.min(now + debounce, pendingSince + maximumWait);
 
     for (const [id, entry] of world.runs) kv.put(`run:${id}`, entry);
+    for (const id of loaded) if (!world.runs.has(id)) kv.delete(`run:${id}`);
 
     const revision = (kv.get<number>("revision") ?? 0) + 1;
 

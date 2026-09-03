@@ -819,3 +819,71 @@ describe("ownerOf", () => {
     assert.equal(ownerOf(notes, { sha: undefined, run: undefined }), undefined);
   });
 });
+
+describe("checks that gathered under a suite of their own", () => {
+  const somewhere = { name: "r", full_name: "o/r", html_url: "https://github.com/o/r" };
+
+  function stray() {
+    const world = emptyWorld();
+
+    apply(
+      world,
+      delivery("check_run", "completed", {
+        ...checkRun("build", "failure", { id: 7 }),
+        repository: somewhere,
+      }),
+      { runId: "suite-5" },
+    );
+
+    return world;
+  }
+
+  test("are handed to the workflow run once GitHub owns up to one", () => {
+    const world = stray();
+
+    apply(
+      world,
+      delivery("workflow_run", "completed", {
+        ...workflowRun("failure", { check_suite_id: 5, name: "CI", event: "push" }),
+        repository: somewhere,
+      }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual([...world.runs.keys()], ["14244"]);
+    assert.deepEqual(
+      world.runs.get("14244")!.jobs.map(({ name }) => name),
+      ["build"],
+    );
+  });
+
+  test("keep the verdict they already reached, so the board does not go quiet", () => {
+    const world = stray();
+
+    apply(
+      world,
+      delivery("workflow_run", "completed", {
+        ...workflowRun("success", { check_suite_id: 5, name: "CI", event: "push" }),
+        repository: somewhere,
+      }),
+      { runId: "14244" },
+    );
+
+    assert.equal(world.runs.get("14244")!.alarmed, true);
+  });
+
+  test("are left alone by a workflow run belonging to another suite", () => {
+    const world = stray();
+
+    apply(
+      world,
+      delivery("workflow_run", "completed", {
+        ...workflowRun("failure", { check_suite_id: 9, name: "CI", event: "push" }),
+        repository: somewhere,
+      }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual([...world.runs.keys()].sort(), ["14244", "suite-5"]);
+  });
+});
