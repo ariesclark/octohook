@@ -16,10 +16,6 @@ function profileUrl(username: string): string {
   return `https://github.com/${encodeURIComponent(username)}`;
 }
 
-export function hasSingleAuthor(commits: PushCommit[]): boolean {
-  return new Set(commits.map(({ author }) => author.username ?? author.name)).size <= 1;
-}
-
 export function CommitLine({
   commit: { id, url, message, author },
   codeMessage = false,

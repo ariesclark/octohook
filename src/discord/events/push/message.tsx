@@ -1,7 +1,7 @@
 import { t } from "../../messages.ts";
 import { avatarThumbnail } from "../../components/avatar";
 import { WebhookContent } from "../../types";
-import { besideThumbnail, CommitLine, hasSingleAuthor } from "./commits";
+import { besideThumbnail, CommitLine } from "./commits";
 import { authorsByContribution } from "./contribution";
 import {
   authorAvatarUrl,
@@ -33,7 +33,9 @@ export async function PushMessage({
   );
 
   const headline = <RefHeadline event={event} branch={branch} hook={hook} showSender={false} />;
-  const showAuthor = !hasSingleAuthor(event.commits);
+  // Whoever pushed is already the message's own name, so only a commit someone else wrote is worth
+  // signing; `CommitLine` drops the pusher's own from a push carrying both.
+  const showAuthor = others.length > 0;
 
   const listed = event.commits.slice(0, mostCommits);
   const rest = event.commits.length - listed.length;
