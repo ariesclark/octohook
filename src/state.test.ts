@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { Delivery, Note } from "./state.ts";
-import { apply, emptyWorld, forget, ownerOf, watching } from "./state.ts";
+import { apply, emptyWorld, forget, ownerOf, unswept, watching } from "./state.ts";
 
 function delivery(event: string, action: string | null, payload: object, at = "01:00"): Delivery {
   return { event, action, delivered_at: at, payload: payload as Record<string, never> };
@@ -598,6 +598,48 @@ describe("watching", () => {
     );
 
     assert.deepEqual(watching(world), []);
+  });
+
+  function finished(annotations: unknown) {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("check_run", "completed", {
+        ...checkRun("build", "failure", { id: 100504953271 }),
+        repository: somewhere,
+      }),
+      { runId: "14244", annotations: annotations as never },
+    );
+
+    return world;
+  }
+
+  test("keeps a finished run in view while GitHub has filed no annotations under it", () => {
+    assert.deepEqual(
+      watching(finished(undefined)).map(({ id }) => id),
+      ["14244"],
+    );
+  });
+
+  test("keeps it in view when the ask came back empty, which a late annotation still contradicts", () => {
+    assert.deepEqual(
+      watching(finished([])).map(({ id }) => id),
+      ["14244"],
+    );
+  });
+
+  test("lets it go once something was filed", () => {
+    const annotation = { path: "a.cs", startLine: 1, level: "warning", title: null, message: "m" };
+
+    assert.deepEqual(watching(finished([annotation])), []);
+  });
+
+  test("lets it go once swept, so a job with nothing to say is asked only the once", () => {
+    const world = finished([]);
+    for (const entry of world.runs.values()) entry.swept = true;
+
+    assert.deepEqual(watching(world), []);
+    assert.deepEqual(unswept([...world.runs.values()][0]!), []);
   });
 
   test("does not watch a run nothing has reported a job for", () => {

@@ -16,12 +16,14 @@ import {
   applyJobs,
   forget,
   noteKeyOf,
+  unswept,
   watching,
   type Note,
   type Repository,
   type Run,
   type World,
 } from "./state.ts";
+import { worthSaying } from "./discord/events/check-run/annotations.ts";
 import { annotationsUnder } from "./verdict.ts";
 
 type Meta = {
@@ -316,13 +318,15 @@ export class Channel extends DurableObject<CloudflareBindings> {
 
     // The asks are independent, so they go together; the folds share a world, so they go in turn.
     const answers = await Promise.all(
-      runs.map(async (entry) => ({
-        entry,
-        ...(await github.watchJobs(
-          { repository: entry.repository!.full_name!, runId: entry.id },
-          entry.etag,
-        )),
-      })),
+      runs
+        .filter((entry) => entry.jobs.some(({ conclusion }) => !conclusion))
+        .map(async (entry) => ({
+          entry,
+          ...(await github.watchJobs(
+            { repository: entry.repository!.full_name!, runId: entry.id },
+            entry.etag,
+          )),
+        })),
     );
 
     const seen = new Date().toISOString();
@@ -333,6 +337,24 @@ export class Channel extends DurableObject<CloudflareBindings> {
       entry.etag = etag;
 
       if (jobs) moved = applyJobs(world, entry.id, jobs, entry.at, seen).length > 0 || moved;
+    }
+
+    for (const entry of runs) {
+      const jobs = unswept(entry);
+      if (jobs.length === 0) continue;
+
+      const found = await Promise.all(
+        jobs.map((job) => github.resolveAnnotations(entry.repository!.full_name!, job.checkRunId!)),
+      );
+
+      jobs.forEach((job, index) => {
+        const annotations = found[index];
+        if (annotations) job.annotations = worthSaying(annotations);
+      });
+
+      // An ask GitHub refused is worth repeating; one it answered is settled, however empty.
+      entry.swept = found.every((annotations) => annotations !== undefined);
+      moved = true;
     }
 
     return moved;

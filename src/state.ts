@@ -9,6 +9,8 @@ export type Job = {
   startedAt: string | null;
   completedAt: string | null;
   step?: string;
+  /** What the annotations endpoint is asked for; only a check run ever names one. */
+  checkRunId?: number;
   annotations?: Annotation[];
   output?: { title?: string; summary?: string };
 };
@@ -44,6 +46,8 @@ export type Run = {
   settled?: string | null;
   /** What GitHub last answered the jobs endpoint with, so a poll that moves nothing costs nothing. */
   etag?: string;
+  /** Its finished jobs have been asked once more for annotations GitHub had not yet filed. */
+  swept?: boolean;
   /** Latched, never cleared: a re-run going green must not delete the message that woke someone. */
   alarmed?: true;
 };
@@ -189,12 +193,24 @@ function repositoryIn(payload: Record<string, unknown>): Repository | undefined 
 }
 
 /** The runs still worth asking GitHub about: a job of theirs has not reached a verdict. */
+/**
+ * Finished jobs holding no annotations, which is not proof there are none: the runner files them
+ * against a check run it has already completed, so an ask at completion can arrive too early.
+ */
+export function unswept(entry: Run): Job[] {
+  if (entry.swept) return [];
+
+  return entry.jobs.filter(
+    (job) => job.conclusion && job.checkRunId !== undefined && (job.annotations?.length ?? 0) === 0,
+  );
+}
+
 export function watching(world: World): Run[] {
   return [...world.runs.values()].filter(
     (entry) =>
       entry.repository?.full_name &&
       entry.jobs.length > 0 &&
-      entry.jobs.some(({ conclusion }) => !conclusion),
+      (entry.jobs.some(({ conclusion }) => !conclusion) || unswept(entry).length > 0),
   );
 }
 
@@ -235,6 +251,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     if (!resolved.runId) return "";
 
     const check = payload.check_run as unknown as {
+      id: number;
       name: string;
       html_url: string;
       head_sha: string;
@@ -263,6 +280,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       conclusion: check.conclusion,
       startedAt: check.started_at,
       completedAt: check.completed_at,
+      checkRunId: check.id,
       annotations: resolved.annotations,
       output:
         check.output?.title || check.output?.summary
