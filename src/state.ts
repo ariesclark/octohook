@@ -390,7 +390,9 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
     entry.repository ??= repositoryIn(payload);
     entry.sha ??= workflow.head_sha;
     entry.branch ??= workflow.head_branch;
-    entry.startedAt ??= workflow.run_started_at;
+    // Approval starts a run over, and GitHub moves `run_started_at` with it, so the wait before
+    // it is not counted as time the run took.
+    entry.startedAt = workflow.run_started_at ?? entry.startedAt;
     // `updated_at` moves while the run is going, so it only reads as an end once there is a verdict.
     entry.completedAt = workflow.conclusion ? workflow.updated_at : undefined;
     // Approval sets a run going again, so the wait it was under is over.

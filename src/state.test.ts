@@ -990,3 +990,35 @@ describe("a run that was held for approval", () => {
     assert.equal(world.runs.get("14244")!.settled, "failure");
   });
 });
+
+describe("how long a run took", () => {
+  const somewhere = { name: "r", full_name: "o/r", html_url: "https://github.com/o/r" };
+
+  const started = (
+    at: string | undefined,
+    action = "completed",
+    conclusion: string | null = null,
+  ) =>
+    delivery("workflow_run", action, {
+      ...workflowRun(conclusion, { run_started_at: at }),
+      repository: somewhere,
+    });
+
+  test("is counted from when it got going, not from when it was first asked for", () => {
+    const world = emptyWorld();
+
+    apply(world, started("2026-09-03T07:25:22Z", "requested"), { runId: "14244" });
+    apply(world, started("2026-09-03T08:23:44Z", "completed", "success"), { runId: "14244" });
+
+    assert.equal(world.runs.get("14244")!.startedAt, "2026-09-03T08:23:44Z");
+  });
+
+  test("keeps the start it knows when a later event names none", () => {
+    const world = emptyWorld();
+
+    apply(world, started("2026-09-03T07:25:22Z", "requested"), { runId: "14244" });
+    apply(world, started(undefined, "completed", "success"), { runId: "14244" });
+
+    assert.equal(world.runs.get("14244")!.startedAt, "2026-09-03T07:25:22Z");
+  });
+});
