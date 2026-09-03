@@ -234,8 +234,11 @@ export function watching(world: World): Run[] {
   return [...world.runs.values()].filter(
     (entry) =>
       entry.repository?.full_name &&
-      entry.jobs.length > 0 &&
-      (entry.jobs.some(({ conclusion }) => !conclusion) || unswept(entry).length > 0),
+      // A run GitHub never settled is owed a verdict, and a run holding no job at all will never
+      // be brought one by its own checks — both have to be asked for.
+      (entry.settled === undefined ||
+        (entry.jobs.length > 0 &&
+          (entry.jobs.some(({ conclusion }) => !conclusion) || unswept(entry).length > 0))),
   );
 }
 

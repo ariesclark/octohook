@@ -58,6 +58,7 @@ describe("what a check run resolves to", () => {
       runReferenceFromSuite: async () => undefined,
       resolveAnnotations: async () => [annotation],
       watchJobs: async () => ({}),
+      watchRun: async () => undefined,
       ...over,
     };
   }
@@ -126,6 +127,7 @@ describe("a check whose suite names no workflow run", () => {
       runReferenceFromSuite: async () => undefined,
       resolveAnnotations: async () => [],
       watchJobs: async () => ({}),
+      watchRun: async () => undefined,
     };
   }
 

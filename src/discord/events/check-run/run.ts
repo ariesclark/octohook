@@ -44,6 +44,8 @@ export type ReportedJob = {
 
 export type Watched = { etag?: string; jobs?: ReportedJob[] };
 
+export type Settled = { status: string; conclusion: string | null };
+
 export type Github = {
   resolveRun(reference: RunReference): Promise<ResolvedRun | undefined>;
   runReferenceFromSuite(repository: string, suiteId: number): Promise<RunReference | undefined>;
@@ -51,6 +53,8 @@ export type Github = {
   resolveAnnotations(repository: string, checkRunId: number): Promise<Annotation[] | undefined>;
   /** Undefined jobs means nothing moved: a 304 costs no rate limit. */
   watchJobs(reference: RunReference, etag?: string): Promise<Watched>;
+  /** What the run itself says it is doing, for one no event ever settled. */
+  watchRun(reference: RunReference): Promise<Settled | undefined>;
 };
 
 /** A Durable Object shares its isolate with every other instance of its class. */
@@ -93,6 +97,14 @@ export function createGithub(token?: string): Github {
 
       const { jobs } = (await response.json()) as { jobs: ReportedJob[] };
       return { etag: response.headers.get("etag") ?? undefined, jobs };
+    },
+
+    async watchRun({ repository, runId }: RunReference): Promise<Settled | undefined> {
+      const run = await get<{ status: string; conclusion: string | null }>(
+        `/repos/${repository}/actions/runs/${runId}`,
+      );
+
+      return run ? { status: run.status, conclusion: run.conclusion } : undefined;
     },
 
     resolveRun(reference: RunReference): Promise<ResolvedRun | undefined> {

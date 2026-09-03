@@ -586,12 +586,21 @@ describe("watching", () => {
     );
   });
 
-  test("stops watching once every job has a verdict", () => {
+  test("stops watching once every job has a verdict, and the run has one too", () => {
     const world = emptyWorld();
     apply(
       world,
       delivery("check_run", "completed", {
         ...checkRun("build", "success"),
+        repository: somewhere,
+      }),
+      { runId: "14244" },
+    );
+
+    apply(
+      world,
+      delivery("check_suite", "completed", {
+        check_suite: { conclusion: "success" },
         repository: somewhere,
       }),
       { runId: "14244" },
@@ -609,6 +618,15 @@ describe("watching", () => {
         repository: somewhere,
       }),
       { runId: "14244", annotations: annotations as never },
+    );
+
+    apply(
+      world,
+      delivery("check_suite", "completed", {
+        check_suite: { conclusion: "success" },
+        repository: somewhere,
+      }),
+      { runId: "14244" },
     );
 
     return world;
@@ -640,6 +658,20 @@ describe("watching", () => {
 
     assert.deepEqual(watching(world), []);
     assert.deepEqual(unswept([...world.runs.values()][0]!), []);
+  });
+
+  test("watches a run still owed a verdict, which no job of its own will bring", () => {
+    const world = emptyWorld();
+    apply(
+      world,
+      delivery("workflow_run", "requested", { ...workflowRun(null), repository: somewhere }),
+      { runId: "14244" },
+    );
+
+    assert.deepEqual(
+      watching(world).map(({ id }) => id),
+      ["14244"],
+    );
   });
 
   test("does not watch a run nothing has reported a job for", () => {
