@@ -17,7 +17,13 @@ describe("boardMark", () => {
   });
 
   it("keeps a job's verdict over the run's", () => {
-    const job = { name: "build", url: "u", conclusion: "failure", startedAt: null, completedAt: null };
+    const job = {
+      name: "build",
+      url: "u",
+      conclusion: "failure",
+      startedAt: null,
+      completedAt: null,
+    };
 
     expect(boardMark([job], [], "success")).toBe(marks.bad);
   });
@@ -39,9 +45,7 @@ describe("runSummary", () => {
   });
 
   it("hangs the run's clock off the last thing it says", () => {
-    expect(runSummary([job("failure"), job("success")], [], ran)).toBe(
-      "1 failed, 1 passed in 17s",
-    );
+    expect(runSummary([job("failure"), job("success")], [], ran)).toBe("1 failed, 1 passed in 17s");
   });
 
   it("says nothing about a clock it does not have", () => {
@@ -78,7 +82,9 @@ describe("a job the board is watching", () => {
   });
 
   it("draws a running job once it can say where it is", () => {
-    expect(JobRows({ jobs: [job({ step: "Set up job" })], repositoryUrl: "https://g/o/r" })).toHaveLength(1);
+    expect(
+      JobRows({ jobs: [job({ step: "Set up job" })], repositoryUrl: "https://g/o/r" }),
+    ).toHaveLength(1);
   });
 
   it("keeps quiet about a job that passed without a word", () => {
@@ -89,7 +95,12 @@ describe("a job the board is watching", () => {
 
   it("drops the step once the job has a verdict", () => {
     const settled = drawn([
-      job({ conclusion: "failure", step: "Run vitest", startedAt: "2026-08-25T01:00:00Z", completedAt: "2026-08-25T01:00:09Z" }),
+      job({
+        conclusion: "failure",
+        step: "Run vitest",
+        startedAt: "2026-08-25T01:00:00Z",
+        completedAt: "2026-08-25T01:00:09Z",
+      }),
     ]);
 
     expect(settled).not.toContain("Run vitest");
