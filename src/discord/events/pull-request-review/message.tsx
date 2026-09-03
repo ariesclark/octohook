@@ -40,10 +40,7 @@ export function PullRequestReviewMessage({
           })}
         </b>
       </text>
-      <Brief
-        body={(review as { body?: string | null }).body}
-        url={(review as { html_url: string }).html_url}
-      />
+      <Brief body={review.body} url={review.html_url} />
     </message>
   );
 }

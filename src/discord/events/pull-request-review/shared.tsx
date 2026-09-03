@@ -7,5 +7,5 @@ export type PullRequestReviewEvent = Extract<
 
 /** GitHub gives a review one of three verdicts; anything else is a state we have no name for. */
 export function reviewVerdict(event: PullRequestReviewEvent): string {
-  return (event.review as { state?: string }).state?.toLowerCase() ?? "commented";
+  return event.review.state?.toLowerCase() ?? "commented";
 }
