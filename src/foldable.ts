@@ -81,8 +81,6 @@ const carried: Record<string, string[]> = {
     "check_run.check_suite.head_branch",
     "check_run.app.name",
     "check_run.pull_requests",
-    "check_run.output.title",
-    "check_run.output.summary",
   ],
   check_suite: [
     ...repository,

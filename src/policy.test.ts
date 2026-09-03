@@ -82,10 +82,6 @@ describe("the subject a run presents", () => {
     );
     assert.equal(subjectOfRun(run({ jobs: [job({ annotations: [noted("notice")] })] })).details, 0);
     assert.equal(
-      subjectOfRun(run({ jobs: [job({ output: { title: "2 warnings" } })] })).details,
-      1,
-    );
-    assert.equal(
       subjectOfRun(
         run({ jobs: [job()], deployments: [{ id: 1, state: "success", place: "prod" }] }),
       ).details,
@@ -114,14 +110,13 @@ describe("the subject a run presents", () => {
           noted("failure", "broke"),
           noted("notice", "fyi"),
         ],
-        output: { title: "2 warnings" },
       },
     ];
 
     const subject = subjectOfRun(run({ jobs }));
 
     assert.equal(subject.annotations, 2);
-    assert.equal(subject.details, 3);
+    assert.equal(subject.details, 2);
   });
 
   test("counts what it shipped apart from what it said", () => {

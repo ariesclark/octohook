@@ -1,5 +1,5 @@
 import { visible } from "./discord/events/check-run/annotations.ts";
-import { arrived, said } from "./discord/events/check-run/facts.ts";
+import { arrived } from "./discord/events/check-run/facts.ts";
 import type { Deployment, Job, Run } from "./state.ts";
 
 /**
@@ -26,12 +26,12 @@ export function warningsUnder(run: Pick<Run, "jobs">): number {
   return run.jobs.reduce((count, job) => count + visible(job).length, 0);
 }
 
-/** Everything the board draws beneath the run: annotations, a job's own summary, deployments. */
+/** Everything the board draws beneath the run: annotations and deployments. */
 export function detailsUnder(
   run: Pick<Run, "jobs" | "deployments">,
   warnings = warningsUnder(run),
 ): number {
-  return warnings + run.jobs.filter(said).length + arrived(run.deployments).length;
+  return warnings + arrived(run.deployments).length;
 }
 
 /** Whether a finished job was ever asked for annotations, which a count of them cannot tell apart. */

@@ -1,8 +1,7 @@
 import { t, tOf, type Phrase } from "../../messages.ts";
-import { summarise } from "../../../markdown/summary";
 import { annotationText, bySeverity, visible } from "./annotations.ts";
 import { fileUrl } from "./annotations.ts";
-import { arrived, said, underway } from "./facts.ts";
+import { arrived, underway } from "./facts.ts";
 import { checkDuration } from "./shared";
 
 const small = "-# ";
@@ -22,20 +21,7 @@ export type BoardJob = {
     title: string | null;
     message: string;
   }>;
-  output?: { title?: string; summary?: string };
 };
-
-const longestOutput = 140;
-
-function outputOf(job: BoardJob): string | undefined {
-  const { title, summary } = job.output ?? {};
-  const said = summary ? summarise(summary, longestOutput) : undefined;
-
-  if (!title) return said;
-  if (!said || said === title) return title;
-
-  return `${title} — ${said}`;
-}
 
 export type BoardDeployment = {
   id: number;
@@ -60,7 +46,7 @@ function deploymentsOf(job: BoardJob, deployments: BoardDeployment[] = []) {
 }
 
 function jobTalks(job: BoardJob): boolean {
-  return visible(job).length > 0 || said(job);
+  return visible(job).length > 0;
 }
 
 /** A job is on a step only until it has a verdict; after that the step is history. */
@@ -163,7 +149,6 @@ function Job({
 }: Rows & { job: BoardJob; first: boolean }) {
   const duration = checkDuration(job.startedAt, job.completedAt);
   const step = stepOf(job);
-  const said = outputOf(job);
 
   return (
     <>
@@ -171,16 +156,6 @@ function Job({
       {small}
       <a href={job.url}>{job.name}</a>
       {step ? ` • ${step}` : duration ? ` • ${duration}` : ""}
-      {said ? (
-        <>
-          <br />
-          {small}
-          {"- "}
-          {said}
-        </>
-      ) : (
-        ""
-      )}
       <Annotations job={job} repositoryUrl={repositoryUrl} sha={sha} />
       {deploymentsOf(job, deployments).map((deployment) => (
         <Deployment deployment={deployment} under />

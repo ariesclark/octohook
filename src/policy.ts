@@ -22,7 +22,7 @@ export type RunSubject = {
   /** The worst it has been, so a re-run going green does not erase that it failed. */
   ever: Result;
   seconds?: number;
-  /** What the board draws under the run: annotations, a job's own summary, deployments. */
+  /** What the board draws under the run: annotations and deployments. */
   details: number;
   /** How many warnings or worse a reader would see, folded the way the board folds them. */
   annotations: number;
