@@ -1,4 +1,4 @@
-import { briefBody, SeeMore } from "../body";
+import { Brief } from "../body";
 import { Ref } from "../../components/ref";
 import { t, type Phrase } from "../../messages.ts";
 import { HookScope, pullRef } from "../../refs";
@@ -119,9 +119,6 @@ export function PullRequestMessage({
         : (headlines[action] ?? "pull.other");
 
   const open = readActions.has(action);
-  const { components, truncated } = open
-    ? briefBody(pull_request.body)
-    : { components: [], truncated: false };
 
   const headline = (
     <text>
@@ -148,17 +145,10 @@ export function PullRequestMessage({
   return (
     <message {...identity(event)}>
       {headline}
-      {!readActions.has(action) ? (
+      {!open ? (
         []
       ) : (
-        <container>
-          <text>
-            <h3>{pull_request.title}</h3>
-          </text>
-          {components.length > 0 ? <separator divider={false} /> : []}
-          {components}
-          {truncated ? <SeeMore url={pull_request.html_url} /> : []}
-        </container>
+        <Brief title={pull_request.title} body={pull_request.body} url={pull_request.html_url} />
       )}
     </message>
   );

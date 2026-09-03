@@ -63,3 +63,40 @@ export function SeeMore({ url }: { url: string }) {
     </actionrow>
   );
 }
+
+/**
+ * What a thing is called and what it says, which is read once: when a pull request goes up, when an
+ * issue is opened, when a review lands. Anything else belongs beneath it, as `children`.
+ */
+export function Brief({
+  title,
+  body,
+  url,
+  children,
+}: {
+  title?: string;
+  body: string | null | undefined;
+  url: string;
+  children?: unknown;
+}) {
+  const { components, truncated } = briefBody(body);
+
+  // A container holding nothing at all is refused, and untitled silence is nothing to draw.
+  if (!title && components.length === 0) return [];
+
+  return (
+    <container>
+      {title ? (
+        <text>
+          <h3>{title}</h3>
+        </text>
+      ) : (
+        []
+      )}
+      {title && components.length > 0 ? <separator divider={false} /> : []}
+      {components}
+      {children ?? []}
+      {truncated ? <SeeMore url={url} /> : []}
+    </container>
+  );
+}

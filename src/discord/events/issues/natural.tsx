@@ -1,7 +1,8 @@
+import { Brief } from "../body";
 import { t, type Phrase } from "../../messages.ts";
 import { WebhookContent } from "../../types";
 import { displayUsername } from "../push/shared";
-import { excerpt, issueLabels, IssuesEvent } from "./shared";
+import { issueLabels, IssuesEvent } from "./shared";
 
 const headlines: Partial<Record<string, Phrase>> = {
   opened: "issue.opened",
@@ -9,12 +10,19 @@ const headlines: Partial<Record<string, Phrase>> = {
   reopened: "issue.reopened",
 };
 
+/**
+ * An issue is read when it is opened, so that message carries what it is called and what it says.
+ * Every other message is about a change of state, and the title has already been said above it.
+ */
+const readActions = new Set(["opened"]);
+
 export function IssueNatural({ event }: { event: IssuesEvent }): WebhookContent {
   const { issue, repository, sender, action } = event;
 
-  const summary = excerpt(issue.body);
-  const labels = issueLabels(issue.labels);
   const closedAsNotPlanned = action === "closed" && issue.state_reason === "not_planned";
+  const open = readActions.has(action);
+
+  const labels = open ? issueLabels(issue.labels) : undefined;
 
   return (
     <message username={displayUsername(sender.login)} avatar_url={sender.avatar_url}>
@@ -27,22 +35,22 @@ export function IssueNatural({ event }: { event: IssuesEvent }): WebhookContent 
                 {repository.name}#{issue.number}
               </a>
             ),
-            title: issue.title,
           })}
         </b>
-        {summary || labels ? (
-          <>
-            <br />
-            <small>
-              {summary ?? ""}
-              {summary && labels ? " • " : ""}
-              {labels ? t("issue.labels", { labels }) : ""}
-            </small>
-          </>
-        ) : (
-          ""
-        )}
       </text>
+      {!open ? (
+        []
+      ) : (
+        <Brief title={issue.title} body={issue.body} url={issue.html_url}>
+          {labels ? (
+            <text>
+              <small>{t("issue.labels", { labels })}</small>
+            </text>
+          ) : (
+            []
+          )}
+        </Brief>
+      )}
     </message>
   );
 }

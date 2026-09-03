@@ -1,4 +1,4 @@
-import { briefBody, SeeMore } from "../body";
+import { Brief } from "../body";
 import { Ref } from "../../components/ref";
 import { t, type Phrase } from "../../messages.ts";
 import { HookScope, pullRef } from "../../refs";
@@ -24,8 +24,6 @@ export function PullRequestReviewMessage({
   const verdict = reviewVerdict(event);
   const within = pull_request.base?.repo ?? repository;
 
-  const { components, truncated } = briefBody((review as { body?: string | null }).body);
-
   return (
     <message username={displayUsername(sender?.login ?? "GitHub")} avatar_url={sender?.avatar_url}>
       <text>
@@ -42,14 +40,10 @@ export function PullRequestReviewMessage({
           })}
         </b>
       </text>
-      {components.length > 0 ? (
-        <container>
-          {components}
-          {truncated ? <SeeMore url={(review as { html_url: string }).html_url} /> : []}
-        </container>
-      ) : (
-        []
-      )}
+      <Brief
+        body={(review as { body?: string | null }).body}
+        url={(review as { html_url: string }).html_url}
+      />
     </message>
   );
 }
