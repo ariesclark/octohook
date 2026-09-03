@@ -102,9 +102,16 @@ export function createGithub(token?: string): Github {
 
       const request = get<{ name: string; run_number: number; event: string }>(
         `/repos/${reference.repository}/actions/runs/${reference.runId}`,
-      ).then((run) =>
-        run ? { name: run.name, runNumber: run.run_number, trigger: run.event } : undefined,
-      );
+      ).then((run) => {
+        // GitHub answers for a run before it will describe one, so a miss is worth asking again
+        // rather than leaving the board nameless for as long as this isolate lives.
+        if (!run) {
+          runs.delete(key);
+          return undefined;
+        }
+
+        return { name: run.name, runNumber: run.run_number, trigger: run.event };
+      });
 
       runs.set(key, request);
       return request;
@@ -120,7 +127,15 @@ export function createGithub(token?: string): Github {
         `/repos/${repository}/actions/runs?check_suite_id=${suiteId}`,
       ).then((found) => {
         const [first] = found?.workflow_runs ?? [];
-        return first ? { repository, runId: String(first.id) } : undefined;
+
+        // A suite exists before its run can be asked for, so a miss is worth asking again rather
+        // than condemning every later check in the suite to the same answer.
+        if (!first) {
+          suites.delete(key);
+          return undefined;
+        }
+
+        return { repository, runId: String(first.id) };
       });
 
       suites.set(key, request);
