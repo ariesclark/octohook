@@ -66,6 +66,7 @@ export type Note = {
   at: string;
   seen: string;
   kind: string;
+  action?: string;
   repository?: Repository;
   sha?: string;
   facts?: Facts;
@@ -91,10 +92,17 @@ export function ownerOf(
   // so a run belongs to whichever of them named the ref it ran on, rather than to the last to
   // arrive. A run whose ref names none of them keeps the latest, which is all there is to go on.
   const named = candidates.filter((note) => note.facts?.ref && note.facts.ref === run.branch);
-  const kept = named.length > 0 ? named : candidates;
+  const placed = named.length > 0 ? named : candidates;
+
+  // Every pull request action repeats the head commit, but only the ones that brought it ran
+  // anything, so a merge or a label must not take the board from the update it belongs to.
+  const brought = placed.filter((note) => !note.action || carrying.has(note.action));
+  const kept = brought.length > 0 ? brought : placed;
 
   return kept[kept.length - 1];
 }
+
+const carrying = new Set(["opened", "synchronize", "reopened", "ready_for_review"]);
 
 export type World = {
   runs: Map<string, Run>;
@@ -480,6 +488,7 @@ export function apply(world: World, delivery: Delivery, resolved: Resolved = {})
       at,
       seen,
       kind: event,
+      action: action ?? undefined,
       review: (review ?? commentOf)?.toString(),
       repository: repositoryIn(payload),
       sha,

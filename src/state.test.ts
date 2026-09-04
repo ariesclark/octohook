@@ -878,6 +878,24 @@ describe("ownerOf", () => {
     assert.equal(ownerOf(notes, run("push", "other")), undefined);
     assert.equal(ownerOf(notes, { sha: undefined, run: undefined }), undefined);
   });
+
+  test("keeps a pull request's runs on the push that brought the commit, not the merge", () => {
+    const facts = { ref: "feature" };
+    const updated = { ...note("synchronize", "pull_request", "abc"), action: "synchronize", facts };
+    const merged = { ...note("closed", "pull_request", "abc"), action: "closed", facts };
+    const labeled = { ...note("labeled", "pull_request", "abc"), action: "labeled", facts };
+
+    const pull = { ...run("pull_request"), branch: "feature" };
+
+    assert.equal(ownerOf([updated, merged, labeled], pull)!.key, "synchronize");
+    assert.equal(ownerOf([merged, updated], pull)!.key, "synchronize");
+  });
+
+  test("lets a merge own the runs when no update for the commit remains", () => {
+    const merged = { ...note("closed", "pull_request", "abc"), action: "closed" };
+
+    assert.equal(ownerOf([merged], run("pull_request"))!.key, "closed");
+  });
 });
 
 describe("checks that gathered under a suite of their own", () => {
